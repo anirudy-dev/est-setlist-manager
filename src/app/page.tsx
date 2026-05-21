@@ -1,7 +1,6 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 
 const PASSWORD = process.env.NEXT_PUBLIC_APP_PASSWORD || 'EST2026@!';
 
@@ -41,15 +40,12 @@ export default function LoginPage() {
 
       <div className="relative z-10 flex flex-col items-center gap-8 w-full max-w-sm px-6">
 
-        {/* Logo — full width, no box, no border */}
-        <div className="w-full animate-fade-in">
-          <Image
+        {/* Logo — mix-blend-mode makes the black PNG background invisible */}
+        <div className="w-full animate-fade-in" style={{ mixBlendMode: 'lighten' }}>
+          <img
             src="/logo.png"
             alt="Every Second Tuesday"
-            width={600}
-            height={600}
-            className="w-full h-auto"
-            priority
+            style={{ width: '100%', height: 'auto', display: 'block' }}
           />
         </div>
 
