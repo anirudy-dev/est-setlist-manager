@@ -25,61 +25,83 @@ function SongRow({
         borderBottom: '1px solid rgba(255,255,255,0.04)',
         display: 'flex',
         alignItems: 'center',
+        gap: 0,
       }}
     >
-      {/* Drag handle */}
+      {/* Drag handle — separate from the + button */}
       <div
         ref={setNodeRef}
         {...listeners}
         {...attributes}
-        className="flex items-center px-2 self-stretch"
-        style={{ cursor: 'grab', color: '#555', fontSize: 14, minWidth: 28 }}
-        title="Drag to setlist"
+        onDoubleClick={() => onAdd(song.id)}
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '8px 12px',
+          cursor: 'grab',
+          minWidth: 0,
+        }}
+        title="Drag to setlist · Double-click to add"
       >
-        ⠿
-      </div>
-
-      {/* Song info */}
-      <div className="flex-1 min-w-0 py-2">
-        <div className="font-bold text-sm truncate" style={{ fontFamily: 'var(--font-body)', color: '#fff' }}>
-          {song.title}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            className="truncate"
+            style={{ fontFamily: 'var(--font-body)', color: '#fff', fontSize: 13, fontWeight: 'bold' }}
+          >
+            {song.title}
+          </div>
+          <div
+            className="truncate"
+            style={{ color: '#666', fontSize: 11, fontFamily: 'var(--font-body)', marginTop: 2 }}
+          >
+            {song.artist}
+          </div>
         </div>
-        <div className="text-xs truncate mt-0.5" style={{ color: '#aaa' }}>
-          {song.artist}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
+          <span
+            className="mood-badge"
+            style={{
+              background: song.moodColor + '22',
+              color: song.moodColor,
+              border: `1px solid ${song.moodColor}44`,
+              fontSize: 9,
+              padding: '1px 5px',
+              borderRadius: 2,
+              fontFamily: 'var(--font-body)',
+            }}
+          >
+            {song.mood}
+          </span>
+          <span style={{ color: '#555', fontSize: 11, fontFamily: 'var(--font-body)' }}>
+            {formatDuration(song.duration)}
+          </span>
         </div>
       </div>
 
-      {/* Mood + duration */}
-      <div className="flex flex-col items-end gap-1 shrink-0 px-2">
-        <span
-          className="mood-badge"
-          style={{ background: song.moodColor + '22', color: song.moodColor, border: `1px solid ${song.moodColor}44` }}
-        >
-          {song.mood}
-        </span>
-        <span className="text-xs tabular-nums" style={{ color: '#aaa', fontFamily: 'var(--font-body)' }}>
-          {formatDuration(song.duration)}
-        </span>
-      </div>
-
-      {/* + button — always visible when a setlist is active */}
+      {/* + button — only shows when a setlist is active */}
       {activeSetlistId && (
         <button
           onClick={() => onAdd(song.id)}
-          className="shrink-0 flex items-center justify-center"
+          title="Add to active setlist"
           style={{
-            width: 36,
-            alignSelf: 'stretch',
+            flexShrink: 0,
+            width: 32,
+            height: '100%',
             background: 'none',
             border: 'none',
-            borderLeft: '1px solid #1e1e1e',
-            color: '#ff3d6e',
-            fontSize: 22,
+            color: '#444',
+            fontSize: 18,
             cursor: 'pointer',
             fontFamily: 'var(--font-body)',
-            flexShrink: 0,
+            paddingRight: 8,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
-          title="Add to active setlist"
+          onMouseEnter={e => (e.currentTarget.style.color = '#ff3d6e')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#444')}
         >
           +
         </button>
@@ -91,33 +113,51 @@ function SongRow({
 interface Props {
   activeSetlistId: string | null;
   onDoubleClickAdd: (songId: string) => void;
+  customSongs?: Song[];
+  onOpenAddSong?: () => void;
 }
 
-export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Props) {
+export default function MasterSongList({
+  activeSetlistId,
+  onDoubleClickAdd,
+  customSongs = [],
+  onOpenAddSong,
+}: Props) {
   const [search, setSearch] = useState('');
   const [selectedDecade, setSelectedDecade] = useState<string>('All');
   const [selectedMood, setSelectedMood] = useState<string>('All');
   const [sortBy, setSortBy] = useState<'title' | 'artist' | 'duration' | 'year'>('year');
 
+  // Merge hardcoded + custom songs
+  const allSongs = useMemo(() => [...SONGS, ...customSongs], [customSongs]);
+
   const moods = useMemo(() => {
     const seen: Record<string, boolean> = {};
     const unique: string[] = [];
-    SONGS.forEach(s => {
-      if (!seen[s.mood]) {
-        seen[s.mood] = true;
-        unique.push(s.mood);
-      }
+    allSongs.forEach(s => {
+      if (!seen[s.mood]) { seen[s.mood] = true; unique.push(s.mood); }
     });
     return ['All', ...unique.sort()];
-  }, []);
+  }, [allSongs]);
+
+  const allDecades = useMemo(() => {
+    const seen: Record<string, boolean> = {};
+    const unique: string[] = [];
+    allSongs.forEach(s => {
+      if (!seen[s.decade]) { seen[s.decade] = true; unique.push(s.decade); }
+    });
+    return ['All', ...unique.sort()];
+  }, [allSongs]);
 
   const filtered = useMemo(() => {
-    let list = [...SONGS];
+    let list = [...allSongs];
     if (selectedDecade !== 'All') list = list.filter(s => s.decade === selectedDecade);
     if (selectedMood !== 'All') list = list.filter(s => s.mood === selectedMood);
     if (search.trim()) {
       const q = search.toLowerCase();
-      list = list.filter(s => s.title.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q));
+      list = list.filter(s =>
+        s.title.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q)
+      );
     }
     list.sort((a, b) => {
       if (sortBy === 'title') return a.title.localeCompare(b.title);
@@ -126,105 +166,112 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Pr
       return a.year - b.year;
     });
     return list;
-  }, [search, selectedDecade, selectedMood, sortBy]);
+  }, [search, selectedDecade, selectedMood, sortBy, allSongs]);
 
   const totalSecs = filtered.reduce((a, s) => a + s.duration, 0);
 
-  const inputStyle = {
+  const inputStyle: React.CSSProperties = {
     background: '#0f0f0f',
     border: '1px solid #252525',
     color: '#fff',
     fontFamily: 'var(--font-body)',
-    fontSize: '12px',
-    padding: '7px 10px',
+    fontSize: 11,
+    padding: '5px 8px',
     outline: 'none',
     width: '100%',
   };
 
-  const selectStyle = { ...inputStyle, cursor: 'pointer', appearance: 'none' as const };
+  const selectStyle: React.CSSProperties = { ...inputStyle, cursor: 'pointer', appearance: 'none' };
+
+  // Group by decade for display
+  const grouped = useMemo(() => {
+    const map: Record<string, Song[]> = {};
+    filtered.forEach(s => {
+      if (!map[s.decade]) map[s.decade] = [];
+      map[s.decade].push(s);
+    });
+    return map;
+  }, [filtered]);
+
+  const decadeOrder = ['1960s', '1970s', '1980s', '1990s', '2000s', '2010s', 'Custom'];
 
   return (
     <div className="flex flex-col h-full" style={{ background: '#0d0d0d', borderRight: '1px solid #1e1e1e' }}>
-
-      {/* Header + filters */}
-      <div className="p-3" style={{ borderBottom: '1px solid #1e1e1e' }}>
-        <div className="flex items-baseline justify-between mb-2">
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', letterSpacing: '0.1em', color: '#fff' }}>
-            SONG CATALOGUE
+      {/* Header */}
+      <div style={{ padding: '12px 12px 8px', borderBottom: '1px solid #1e1e1e' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', letterSpacing: '0.1em', color: '#fff' }}>
+            SONGS
           </span>
-          <span className="text-xs" style={{ color: '#888', fontFamily: 'var(--font-body)' }}>
-            {filtered.length} songs
-          </span>
-        </div>
-
-        <input
-          type="text"
-          placeholder="Search songs or artists..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={inputStyle}
-          className="mb-2"
-        />
-
-        <div className="grid grid-cols-2 gap-1 mb-2">
-          <select value={selectedDecade} onChange={e => setSelectedDecade(e.target.value)} style={selectStyle}>
-            <option value="All">All Decades</option>
-            {DECADES.map(d => <option key={d} value={d}>{d}</option>)}
-          </select>
-          <select value={selectedMood} onChange={e => setSelectedMood(e.target.value)} style={selectStyle}>
-            <option value="All">All Moods</option>
-            {moods.filter(m => m !== 'All').map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
-        </div>
-
-        <div className="flex gap-1">
-          {(['year', 'title', 'artist', 'duration'] as const).map(s => (
+          {onOpenAddSong && (
             <button
-              key={s}
-              onClick={() => setSortBy(s)}
-              className="flex-1 py-1 text-center uppercase"
+              onClick={onOpenAddSong}
               style={{
                 fontFamily: 'var(--font-body)',
-                fontSize: '9px',
-                letterSpacing: '0.05em',
-                background: sortBy === s ? '#fff' : '#1a1a1a',
-                color: sortBy === s ? '#000' : '#888',
-                border: '1px solid #252525',
+                fontSize: 10,
+                background: '#fff',
+                color: '#000',
+                border: 'none',
                 cursor: 'pointer',
+                padding: '3px 10px',
+                letterSpacing: '0.1em',
+                fontWeight: 'bold',
               }}
             >
-              {s}
+              + ADD SONG
             </button>
-          ))}
+          )}
+        </div>
+
+        {/* Search */}
+        <input
+          style={{ ...inputStyle, marginBottom: 6 }}
+          placeholder="Search title or artist..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+
+        {/* Filters row */}
+        <div style={{ display: 'flex', gap: 4 }}>
+          <select style={selectStyle} value={selectedDecade} onChange={e => setSelectedDecade(e.target.value)}>
+            {allDecades.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+          <select style={selectStyle} value={selectedMood} onChange={e => setSelectedMood(e.target.value)}>
+            {moods.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <select style={selectStyle} value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)}>
+            <option value="year">Year</option>
+            <option value="title">Title</option>
+            <option value="artist">Artist</option>
+            <option value="duration">Duration</option>
+          </select>
         </div>
       </div>
 
-      {/* Status banner */}
-      {!activeSetlistId ? (
-        <div className="px-3 py-2 text-xs text-center" style={{ background: '#0f0f0f', color: '#888', borderBottom: '1px solid #1a1a1a', fontFamily: 'var(--font-body)' }}>
-          Select a setlist first, then add songs here
-        </div>
-      ) : (
-        <div className="px-3 py-2 text-xs text-center" style={{ background: '#0a1a0a', color: '#00e676', borderBottom: '1px solid #1a1a1a', fontFamily: 'var(--font-body)' }}>
-          Tap + to add · Drag the ⠿ handle on desktop
-        </div>
-      )}
-
       {/* Song list */}
       <div className="flex-1 overflow-y-auto">
-        {DECADES.filter(d => selectedDecade === 'All' || d === selectedDecade).map(decade => {
-          const songs = filtered.filter(s => s.decade === decade);
-          if (!songs.length) return null;
+        {decadeOrder.map(decade => {
+          const songs = grouped[decade];
+          if (!songs || songs.length === 0) return null;
           return (
             <div key={decade}>
               <div
-                className="px-3 py-1 sticky top-0 flex items-center justify-between"
-                style={{ background: '#0d0d0d', borderBottom: '1px solid #1e1e1e', zIndex: 1 }}
+                style={{
+                  padding: '4px 12px',
+                  position: 'sticky',
+                  top: 0,
+                  background: '#0d0d0d',
+                  borderBottom: '1px solid #1e1e1e',
+                  zIndex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
               >
-                <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.85rem', letterSpacing: '0.15em', color: '#888' }}>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.8rem', letterSpacing: '0.15em', color: '#555' }}>
                   {decade}
                 </span>
-                <span className="text-xs" style={{ color: '#555', fontFamily: 'var(--font-body)' }}>
+                <span style={{ color: '#333', fontSize: 11, fontFamily: 'var(--font-body)' }}>
                   {songs.length}
                 </span>
               </div>
@@ -232,8 +279,8 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Pr
                 <SongRow
                   key={song.id}
                   song={song}
-                  activeSetlistId={activeSetlistId}
                   onAdd={onDoubleClickAdd}
+                  activeSetlistId={activeSetlistId}
                 />
               ))}
             </div>
@@ -242,7 +289,17 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Pr
       </div>
 
       {/* Footer */}
-      <div className="px-3 py-2 flex justify-between text-xs" style={{ borderTop: '1px solid #1e1e1e', color: '#888', fontFamily: 'var(--font-body)' }}>
+      <div
+        style={{
+          padding: '6px 12px',
+          borderTop: '1px solid #1e1e1e',
+          display: 'flex',
+          justifyContent: 'space-between',
+          color: '#444',
+          fontSize: 11,
+          fontFamily: 'var(--font-body)',
+        }}
+      >
         <span>{filtered.length} songs</span>
         <span>{Math.floor(totalSecs / 60)}m {totalSecs % 60}s</span>
       </div>
