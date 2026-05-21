@@ -68,16 +68,16 @@ export default function Dashboard() {
       .then(([gigsData, customData]) => {
         setGigs(gigsData || []);
         const mapped: Song[] = (customData || []).map((s: Record<string, unknown>) => ({
-  id: `custom-${s.id}`,
-  title: s.title as string,
-  artist: s.artist as string,
-  decade: s.decade as string,
-  year: s.year as number,
-  duration: s.duration as number,
-  mood: s.mood as string,
-  moodColor: s.mood_color as string,
-  energy: (s.energy as 'low' | 'medium' | 'high') ?? 'medium',
-}));
+          id: `custom-${s.id}`,
+          title: s.title as string,
+          artist: s.artist as string,
+          decade: s.decade as string,
+          year: s.year as number,
+          duration: s.duration as number,
+          mood: s.mood as string,
+          moodColor: s.mood_color as string,
+          energy: (s.energy as 'low' | 'medium' | 'high') ?? 'medium',
+        }));
         setCustomSongs(mapped);
       })
       .catch(() => {})
