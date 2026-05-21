@@ -451,7 +451,7 @@ export default function Dashboard() {
           style={{ height: 48, borderBottom: '1px solid #1e1e1e', background: '#080808' }}
         >
           <Image
-            src="/est_logo_cropped.png"
+            src="/logo.png"
             alt="Every Second Tuesday"
             width={160}
             height={40}
