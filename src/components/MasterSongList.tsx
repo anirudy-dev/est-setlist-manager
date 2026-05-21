@@ -4,7 +4,15 @@ import { useDraggable } from '@dnd-kit/core';
 import { SONGS, DECADES, formatDuration } from '@/data/songs';
 import { Song } from '@/types';
 
-function DraggableSongRow({ song, onDoubleClick }: { song: Song; onDoubleClick: (song: Song) => void }) {
+function SongRow({
+  song,
+  onAdd,
+  activeSetlistId,
+}: {
+  song: Song;
+  onAdd: (songId: string) => void;
+  activeSetlistId: string | null;
+}) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `master-${song.id}`,
     data: { type: 'master', songId: song.id },
@@ -12,40 +20,71 @@ function DraggableSongRow({ song, onDoubleClick }: { song: Song; onDoubleClick: 
 
   return (
     <div
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      onDoubleClick={() => onDoubleClick(song)}
-      className="song-row flex items-center gap-3 px-3 py-2 select-none"
       style={{
         opacity: isDragging ? 0.3 : 1,
         borderBottom: '1px solid rgba(255,255,255,0.04)',
-        cursor: 'grab',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0,
       }}
-      title="Drag to setlist · Double-click to add to active setlist"
     >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-sm truncate" style={{ fontFamily: 'var(--font-body)', color: '#fff' }}>
-            {song.title}
-          </span>
+      {/* Drag handle — desktop only */}
+      <div
+        ref={setNodeRef}
+        {...listeners}
+        {...attributes}
+        className="hidden md:flex items-center px-2 self-stretch"
+        style={{ cursor: 'grab', color: '#333', fontSize: 14 }}
+        title="Drag to setlist"
+      >
+        ⠿
+      </div>
+
+      {/* Song info */}
+      <div className="flex-1 min-w-0 px-3 py-2">
+        <div className="font-bold text-sm truncate" style={{ fontFamily: 'var(--font-body)', color: '#fff' }}>
+          {song.title}
         </div>
-        <div className="text-xs truncate mt-0.5" style={{ color: '#666', fontFamily: 'var(--font-body)' }}>
+        <div className="text-xs truncate mt-0.5" style={{ color: '#aaa' }}>
           {song.artist}
         </div>
       </div>
 
-      <div className="flex flex-col items-end gap-1 shrink-0">
+      {/* Mood + duration */}
+      <div className="flex flex-col items-end gap-1 shrink-0 pr-2">
         <span
           className="mood-badge"
           style={{ background: song.moodColor + '22', color: song.moodColor, border: `1px solid ${song.moodColor}44` }}
         >
           {song.mood}
         </span>
-        <span className="text-xs tabular-nums" style={{ color: '#555', fontFamily: 'var(--font-body)' }}>
+        <span className="text-xs tabular-nums" style={{ color: '#aaa', fontFamily: 'var(--font-body)' }}>
           {formatDuration(song.duration)}
         </span>
       </div>
+
+      {/* Add button — visible on mobile when a setlist is active */}
+      {activeSetlistId && (
+        <button
+          onClick={() => onAdd(song.id)}
+          className="shrink-0 flex items-center justify-center md:hidden"
+          style={{
+            width: 36,
+            height: '100%',
+            minHeight: 48,
+            background: 'none',
+            border: 'none',
+            borderLeft: '1px solid #1e1e1e',
+            color: '#ff3d6e',
+            fontSize: 22,
+            cursor: 'pointer',
+            fontFamily: 'var(--font-body)',
+          }}
+          title="Add to active setlist"
+        >
+          +
+        </button>
+      )}
     </div>
   );
 }
@@ -97,26 +136,24 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Pr
     border: '1px solid #252525',
     color: '#fff',
     fontFamily: 'var(--font-body)',
-    fontSize: '11px',
-    padding: '5px 8px',
+    fontSize: '12px',
+    padding: '7px 10px',
     outline: 'none',
     width: '100%',
   };
 
-  const selectStyle = {
-    ...inputStyle,
-    cursor: 'pointer',
-    appearance: 'none' as const,
-  };
+  const selectStyle = { ...inputStyle, cursor: 'pointer', appearance: 'none' as const };
 
   return (
     <div className="flex flex-col h-full" style={{ background: '#0d0d0d', borderRight: '1px solid #1e1e1e' }}>
+
+      {/* Header + filters */}
       <div className="p-3" style={{ borderBottom: '1px solid #1e1e1e' }}>
         <div className="flex items-baseline justify-between mb-2">
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', letterSpacing: '0.1em', color: '#fff' }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', letterSpacing: '0.1em', color: '#fff' }}>
             SONG CATALOGUE
           </span>
-          <span className="text-xs" style={{ color: '#555', fontFamily: 'var(--font-body)' }}>
+          <span className="text-xs" style={{ color: '#888', fontFamily: 'var(--font-body)' }}>
             {filtered.length} songs
           </span>
         </div>
@@ -152,7 +189,7 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Pr
                 fontSize: '9px',
                 letterSpacing: '0.05em',
                 background: sortBy === s ? '#fff' : '#1a1a1a',
-                color: sortBy === s ? '#000' : '#666',
+                color: sortBy === s ? '#000' : '#888',
                 border: '1px solid #252525',
                 cursor: 'pointer',
               }}
@@ -163,17 +200,18 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Pr
         </div>
       </div>
 
-      {!activeSetlistId && (
-        <div className="px-3 py-2 text-xs text-center" style={{ background: '#0f0f0f', color: '#555', borderBottom: '1px solid #1a1a1a', fontFamily: 'var(--font-body)' }}>
-          ← Select or create a setlist to add songs
+      {/* Status banner */}
+      {!activeSetlistId ? (
+        <div className="px-3 py-2 text-xs text-center" style={{ background: '#0f0f0f', color: '#888', borderBottom: '1px solid #1a1a1a', fontFamily: 'var(--font-body)' }}>
+          Go to Setlists tab → select a set → come back here to add songs
         </div>
-      )}
-      {activeSetlistId && (
+      ) : (
         <div className="px-3 py-2 text-xs text-center" style={{ background: '#0a1a0a', color: '#00e676', borderBottom: '1px solid #1a1a1a', fontFamily: 'var(--font-body)' }}>
-          Drag songs → setlist &nbsp;|&nbsp; Double-click to add
+          Tap <strong>+</strong> to add · Drag on desktop · Double-click on desktop
         </div>
       )}
 
+      {/* Song list */}
       <div className="flex-1 overflow-y-auto">
         {DECADES.filter(d => selectedDecade === 'All' || d === selectedDecade).map(decade => {
           const songs = filtered.filter(s => s.decade === decade);
@@ -184,18 +222,19 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Pr
                 className="px-3 py-1 sticky top-0 flex items-center justify-between"
                 style={{ background: '#0d0d0d', borderBottom: '1px solid #1e1e1e', zIndex: 1 }}
               >
-                <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.85rem', letterSpacing: '0.15em', color: '#555' }}>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.85rem', letterSpacing: '0.15em', color: '#888' }}>
                   {decade}
                 </span>
-                <span className="text-xs" style={{ color: '#333', fontFamily: 'var(--font-body)' }}>
+                <span className="text-xs" style={{ color: '#555', fontFamily: 'var(--font-body)' }}>
                   {songs.length}
                 </span>
               </div>
               {songs.map(song => (
-                <DraggableSongRow
+                <SongRow
                   key={song.id}
                   song={song}
-                  onDoubleClick={s => onDoubleClickAdd(s.id)}
+                  activeSetlistId={activeSetlistId}
+                  onAdd={onDoubleClickAdd}
                 />
               ))}
             </div>
@@ -203,7 +242,8 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Pr
         })}
       </div>
 
-      <div className="px-3 py-2 flex justify-between text-xs" style={{ borderTop: '1px solid #1e1e1e', color: '#444', fontFamily: 'var(--font-body)' }}>
+      {/* Footer */}
+      <div className="px-3 py-2 flex justify-between text-xs" style={{ borderTop: '1px solid #1e1e1e', color: '#888', fontFamily: 'var(--font-body)' }}>
         <span>{filtered.length} songs</span>
         <span>{Math.floor(totalSecs / 60)}m {totalSecs % 60}s</span>
       </div>
