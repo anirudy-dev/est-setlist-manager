@@ -324,7 +324,33 @@ export default function Dashboard() {
                 gigVenue={selectedGig?.venue ?? ''}
                 allSongs={allSongs}
               />
-            ))
+               ))
+          )}
+
+          {/* Total gig length */}
+          {gigSetlists.length > 0 && (
+            <div style={{
+              borderTop: '1px solid #2a2a2a',
+              margin: '4px 0 8px',
+              padding: '10px 12px 4px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'baseline',
+            }}>
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: '#555', letterSpacing: '0.08em' }}>
+                TOTAL GIG
+              </span>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: '#ff3d6e' }}>
+                {(() => {
+                  const secs = gigSetlists.reduce((acc, sl) =>
+                    acc + sl.songs.reduce((a, item) => {
+                      const s = allSongs.find(song => song.id === item.songId);
+                      return a + (s?.duration ?? 0);
+                    }, 0), 0);
+                  return `${Math.floor(secs / 60)}m ${secs % 60}s`;
+                })()}
+              </span>
+            </div>
           )}
         </div>
       )}
