@@ -53,18 +53,20 @@ export async function exportSetlistPDF(setlist: Setlist, gig: Gig) {
   doc.text(`${setlist.songs.length} songs  ·  ${formatTotalDuration(totalSecs)}`, pageWidth - margin, 53, { align: 'right' });
 
   // ── Songs table ───────────────────────────────────────────────────────────
-  const tableData = setlist.songs.map((item, index) => {
-    const song = getSongById(item.songId);
-    if (!song) return null;
-    return [
-      `${index + 1}`,
-      song.title,
-      song.artist,
-      song.decade,
-      song.mood,
-      formatDuration(song.duration),
-    ];
-  }).filter(Boolean);
+ const tableData = setlist.songs
+    .map((item, index) => {
+      const song = getSongById(item.songId);
+      if (!song) return null;
+      return [
+        `${index + 1}`,
+        song.title,
+        song.artist,
+        song.decade,
+        song.mood,
+        formatDuration(song.duration),
+      ];
+    })
+    .filter((row): row is string[] => row !== null);
 
   autoTable(doc, {
     startY: 62,
