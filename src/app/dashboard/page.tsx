@@ -392,10 +392,14 @@ export default function Dashboard() {
         {/* Top nav */}
         <nav
           className="flex items-center justify-between px-4 shrink-0 no-print"
-          style={{ background: '#0a0a0a', borderBottom: '1px solid #1e1e1e', height: 52 }}
+          style={{ background: '#0a0a0a', borderBottom: '1px solid #1e1e1e', height: 60 }}
         >
           <div className="flex items-center gap-3">
-            <Image src="/logo.png" alt="EST" width={80} height={80} className="h-8 w-auto" />
+            <img
+              src="/logo.png"
+              alt="EST"
+              style={{ height: 48, width: 'auto', mixBlendMode: 'lighten' }}
+            />
             <span style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', letterSpacing: '0.12em', color: '#fff' }}>
               SETLIST MANAGER
             </span>
