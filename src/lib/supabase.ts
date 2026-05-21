@@ -1,9 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export default supabase;
 
 // ── Gigs ──────────────────────────────────────────────────────────────────────
 
@@ -16,14 +18,36 @@ export async function getGigs() {
   return data;
 }
 
-export async function createGig(gig: { name: string; date: string; venue: string; notes: string }) {
-  const { data, error } = await supabase.from('gigs').insert(gig).select().single();
+export async function createGig({
+  name,
+  date,
+  venue,
+  notes,
+}: {
+  name: string;
+  date: string;
+  venue: string;
+  notes: string;
+}) {
+  const { data, error } = await supabase
+    .from('gigs')
+    .insert([{ name, date, venue, notes }])
+    .select()
+    .single();
   if (error) throw error;
   return data;
 }
 
-export async function updateGig(id: string, updates: Partial<{ name: string; date: string; venue: string; notes: string }>) {
-  const { data, error } = await supabase.from('gigs').update(updates).eq('id', id).select().single();
+export async function updateGig(
+  id: string,
+  updates: { name?: string; date?: string; venue?: string; notes?: string }
+) {
+  const { data, error } = await supabase
+    .from('gigs')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
   if (error) throw error;
   return data;
 }
@@ -45,18 +69,31 @@ export async function getSetlistsForGig(gigId: string) {
   return data;
 }
 
-export async function createSetlist(setlist: { gig_id: string; name: string; order_num: number }) {
+export async function createSetlist({
+  gig_id,
+  name,
+  order_num,
+}: {
+  gig_id: string;
+  name: string;
+  order_num: number;
+}) {
   const { data, error } = await supabase
     .from('setlists')
-    .insert({ ...setlist, songs: [] })
+    .insert([{ gig_id, name, order_num, songs: [] }])
     .select()
     .single();
   if (error) throw error;
   return data;
 }
 
-export async function updateSetlist(id: string, updates: Partial<{ name: string; songs: unknown[]; order_num: number }>) {
-  const { data, error } = await supabase.from('setlists').update(updates).eq('id', id).select().single();
+export async function updateSetlist(id: string, updates: Record<string, unknown>) {
+  const { data, error } = await supabase
+    .from('setlists')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
   if (error) throw error;
   return data;
 }
@@ -65,6 +102,8 @@ export async function deleteSetlist(id: string) {
   const { error } = await supabase.from('setlists').delete().eq('id', id);
   if (error) throw error;
 }
+
+// ── Custom Songs ──────────────────────────────────────────────────────────────
 
 export async function getCustomSongs() {
   const { data, error } = await supabase
