@@ -61,7 +61,7 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Pr
   const [selectedMood, setSelectedMood] = useState<string>('All');
   const [sortBy, setSortBy] = useState<'title' | 'artist' | 'duration' | 'year'>('year');
 
-  const moods = useMemo(() => ['All', ...new Set(SONGS.map(s => s.mood))].sort(), []);
+  const moods = useMemo(() => { const seen: Record<string, boolean> = {}; const unique: string[] = []; SONGS.forEach(s => { if (!seen[s.mood]) { seen[s.mood] = true; unique.push(s.mood); } }); return ['All', ...unique.sort()]; }, []);
 
   const filtered = useMemo(() => {
     let list = [...SONGS];
