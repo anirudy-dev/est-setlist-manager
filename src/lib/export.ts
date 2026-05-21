@@ -2,38 +2,28 @@ import { Setlist, Gig } from '@/types';
 import { getSongById, formatDuration, formatTotalDuration } from '@/data/songs';
 
 export async function exportSetlistPDF(setlist: Setlist, gig: Gig) {
-  // Dynamic import to avoid SSR issues
   const { default: jsPDF } = await import('jspdf');
-  // @ts-ignore
   const { default: autoTable } = await import('jspdf-autotable');
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
 
-  // ── Header bar ────────────────────────────────────────────────────────────
   doc.setFillColor(8, 8, 8);
   doc.rect(0, 0, pageWidth, 40, 'F');
-
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(22);
   doc.text('EVERY SECOND TUESDAY', margin, 18);
-
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(150, 150, 150);
-  doc.text('nostalgic party rock from the \'70s — 2010s', margin, 27);
-
-  // ── Gig info ──────────────────────────────────────────────────────────────
+  doc.text("nostalgic party rock from the '70s — 2010s", margin, 27);
   doc.setTextColor(80, 80, 80);
   doc.setFontSize(8);
   const gigInfo = [gig.name, gig.venue, gig.date].filter(Boolean).join('  ·  ');
   doc.text(gigInfo, margin, 37);
 
-  // ── Setlist title ─────────────────────────────────────────────────────────
-  doc.setTextColor(20, 20, 20);
   doc.setFillColor(255, 255, 255);
   doc.rect(0, 42, pageWidth, 16, 'F');
   doc.setFont('helvetica', 'bold');
@@ -41,7 +31,6 @@ export async function exportSetlistPDF(setlist: Setlist, gig: Gig) {
   doc.setTextColor(20, 20, 20);
   doc.text(setlist.name.toUpperCase(), margin, 53);
 
-  // Total duration
   const totalSecs = setlist.songs.reduce((acc, item) => {
     const s = getSongById(item.songId);
     return acc + (s?.duration ?? 0);
@@ -50,23 +39,27 @@ export async function exportSetlistPDF(setlist: Setlist, gig: Gig) {
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(100, 100, 100);
-  doc.text(`${setlist.songs.length} songs  ·  ${formatTotalDuration(totalSecs)}`, pageWidth - margin, 53, { align: 'right' });
+  doc.text(
+    `${setlist.songs.length} songs  ·  ${formatTotalDuration(totalSecs)}`,
+    pageWidth - margin,
+    53,
+    { align: 'right' }
+  );
 
-  // ── Songs table ───────────────────────────────────────────────────────────
- const tableData = setlist.songs
-    .map((item, index) => {
-      const song = getSongById(item.songId);
-      if (!song) return null;
-      return [
+  const tableData: string[][] = [];
+  setlist.songs.forEach((item, index) => {
+    const song = getSongById(item.songId);
+    if (song) {
+      tableData.push([
         `${index + 1}`,
         song.title,
         song.artist,
         song.decade,
         song.mood,
         formatDuration(song.duration),
-      ];
-    })
-    .filter((row): row is string[] => row !== null);
+      ]);
+    }
+  });
 
   autoTable(doc, {
     startY: 62,
@@ -86,7 +79,6 @@ export async function exportSetlistPDF(setlist: Setlist, gig: Gig) {
       textColor: [255, 255, 255],
       fontStyle: 'bold',
       fontSize: 8,
-      letterSpacing: 1,
     },
     alternateRowStyles: {
       fillColor: [248, 248, 248],
@@ -101,13 +93,18 @@ export async function exportSetlistPDF(setlist: Setlist, gig: Gig) {
     },
   });
 
-  // ── Footer ────────────────────────────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const finalY = (doc as any).lastAutoTable.finalY + 10;
   doc.setDrawColor(200, 200, 200);
   doc.line(margin, finalY, pageWidth - margin, finalY);
   doc.setFontSize(7);
   doc.setTextColor(150, 150, 150);
-  doc.text(`Generated ${new Date().toLocaleDateString()}  ·  everysecondtuesday.ca  ·  @everysecondtuesday`, pageWidth / 2, finalY + 5, { align: 'center' });
+  doc.text(
+    `Generated ${new Date().toLocaleDateString()}  ·  everysecondtuesday.ca  ·  @everysecondtuesday`,
+    pageWidth / 2,
+    finalY + 5,
+    { align: 'center' }
+  );
 
   doc.save(`${gig.name}-${setlist.name}.pdf`.replace(/\s+/g, '-').toLowerCase());
 }
@@ -118,10 +115,11 @@ export function printSetlist(setlist: Setlist, gig: Gig) {
     return acc + (s?.duration ?? 0);
   }, 0);
 
-  const rows = setlist.songs.map((item, i) => {
-    const song = getSongById(item.songId);
-    if (!song) return '';
-    return `
+  const rows = setlist.songs
+    .map((item, i) => {
+      const song = getSongById(item.songId);
+      if (!song) return '';
+      return `
       <tr>
         <td class="num">${i + 1}</td>
         <td class="title">${song.title}</td>
@@ -130,7 +128,8 @@ export function printSetlist(setlist: Setlist, gig: Gig) {
         <td class="mood">${song.mood}</td>
         <td class="dur">${formatDuration(song.duration)}</td>
       </tr>`;
-  }).join('');
+    })
+    .join('');
 
   const html = `
 <!DOCTYPE html>
@@ -177,7 +176,7 @@ export function printSetlist(setlist: Setlist, gig: Gig) {
     <span>everysecondtuesday.ca  ·  @everysecondtuesday</span>
     <span>${new Date().toLocaleDateString()}</span>
   </div>
-  <script>window.onload = () => { window.print(); }</script>
+  <script>window.onload = () => { window.print(); }<\/script>
 </body>
 </html>`;
 
