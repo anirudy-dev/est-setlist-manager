@@ -65,3 +65,30 @@ export async function deleteSetlist(id: string) {
   const { error } = await supabase.from('setlists').delete().eq('id', id);
   if (error) throw error;
 }
+
+export async function getCustomSongs() {
+  const { data, error } = await supabase
+    .from('custom_songs')
+    .select('*')
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+export async function addCustomSong(song: {
+  title: string;
+  artist: string;
+  decade: string;
+  year: number;
+  duration: string;
+  mood: string;
+  mood_color: string;
+}) {
+  const { data, error } = await supabase
+    .from('custom_songs')
+    .insert([song])
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
