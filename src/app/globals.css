@@ -1,0 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: 'Bebas Neue', Impact, sans-serif;
+  --font-body: 'Space Mono', 'Courier New', monospace;
+  --bg: #080808;
+  --card: #141414;
+  --border: #252525;
+  --muted: #3a3a3a;
+  --text: #ffffff;
+  --sub: #888888;
+  --accent-1: #ff3d6e;
+  --accent-2: #ff9500;
+  --accent-3: #ffe600;
+  --accent-4: #00e676;
+  --accent-5: #00b4ff;
+  --accent-6: #b300ff;
+  --rainbow: linear-gradient(90deg, #ff3d6e, #ff9500, #ffe600, #00e676, #00b4ff, #b300ff);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #555; }
+
+/* Rainbow text effect */
+.rainbow-text {
+  background: var(--rainbow);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glowing border */
+.glow-border {
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.05), 0 0 20px rgba(255,61,110,0.1);
+}
+
+/* Drag ghost */
+.dragging-ghost {
+  opacity: 0.4;
+}
+
+/* Print styles */
+@media print {
+  body { background: white !important; color: black !important; }
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+  .print-area {
+    page-break-inside: avoid;
+  }
+}
+
+/* Mood badge */
+.mood-badge {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 2px;
+}
+
+/* Song row hover */
+.song-row {
+  transition: background 0.15s ease;
+  cursor: grab;
+}
+.song-row:active { cursor: grabbing; }
+.song-row:hover { background: rgba(255,255,255,0.05); }
+
+/* Setlist drop zone */
+.drop-zone-active {
+  background: rgba(255, 61, 110, 0.08);
+  border-color: rgba(255, 61, 110, 0.4) !important;
+}
+
+/* Input styles */
+input, textarea, select {
+  font-family: var(--font-body);
+}
