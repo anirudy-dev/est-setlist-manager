@@ -61,10 +61,15 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Pr
   const [selectedMood, setSelectedMood] = useState<string>('All');
   const [sortBy, setSortBy] = useState<'title' | 'artist' | 'duration' | 'year'>('year');
 
-   const moods = useMemo(() => {
+  const moods = useMemo(() => {
     const seen: Record<string, boolean> = {};
     const unique: string[] = [];
-    SONGS.forEach(s => { if (!seen[s.mood]) { seen[s.mood] = true; unique.push(s.mood); } });
+    SONGS.forEach(s => {
+      if (!seen[s.mood]) {
+        seen[s.mood] = true;
+        unique.push(s.mood);
+      }
+    });
     return ['All', ...unique.sort()];
   }, []);
 
@@ -106,7 +111,6 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Pr
 
   return (
     <div className="flex flex-col h-full" style={{ background: '#0d0d0d', borderRight: '1px solid #1e1e1e' }}>
-      {/* Header */}
       <div className="p-3" style={{ borderBottom: '1px solid #1e1e1e' }}>
         <div className="flex items-baseline justify-between mb-2">
           <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', letterSpacing: '0.1em', color: '#fff' }}>
@@ -117,7 +121,6 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Pr
           </span>
         </div>
 
-        {/* Search */}
         <input
           type="text"
           placeholder="Search songs or artists..."
@@ -127,7 +130,6 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Pr
           className="mb-2"
         />
 
-        {/* Filters row */}
         <div className="grid grid-cols-2 gap-1 mb-2">
           <select value={selectedDecade} onChange={e => setSelectedDecade(e.target.value)} style={selectStyle}>
             <option value="All">All Decades</option>
@@ -139,7 +141,6 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Pr
           </select>
         </div>
 
-        {/* Sort */}
         <div className="flex gap-1">
           {(['year', 'title', 'artist', 'duration'] as const).map(s => (
             <button
@@ -162,7 +163,6 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Pr
         </div>
       </div>
 
-      {/* Info banner */}
       {!activeSetlistId && (
         <div className="px-3 py-2 text-xs text-center" style={{ background: '#0f0f0f', color: '#555', borderBottom: '1px solid #1a1a1a', fontFamily: 'var(--font-body)' }}>
           ← Select or create a setlist to add songs
@@ -174,7 +174,6 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Pr
         </div>
       )}
 
-      {/* Decade groups */}
       <div className="flex-1 overflow-y-auto">
         {DECADES.filter(d => selectedDecade === 'All' || d === selectedDecade).map(decade => {
           const songs = filtered.filter(s => s.decade === decade);
@@ -204,7 +203,6 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Pr
         })}
       </div>
 
-      {/* Footer */}
       <div className="px-3 py-2 flex justify-between text-xs" style={{ borderTop: '1px solid #1e1e1e', color: '#444', fontFamily: 'var(--font-body)' }}>
         <span>{filtered.length} songs</span>
         <span>{Math.floor(totalSecs / 60)}m {totalSecs % 60}s</span>
