@@ -25,23 +25,22 @@ function SongRow({
         borderBottom: '1px solid rgba(255,255,255,0.04)',
         display: 'flex',
         alignItems: 'center',
-        gap: 0,
       }}
     >
-      {/* Drag handle — desktop only */}
+      {/* Drag handle */}
       <div
         ref={setNodeRef}
         {...listeners}
         {...attributes}
-        className="hidden md:flex items-center px-2 self-stretch"
-        style={{ cursor: 'grab', color: '#333', fontSize: 14 }}
+        className="flex items-center px-2 self-stretch"
+        style={{ cursor: 'grab', color: '#555', fontSize: 14, minWidth: 28 }}
         title="Drag to setlist"
       >
         ⠿
       </div>
 
       {/* Song info */}
-      <div className="flex-1 min-w-0 px-3 py-2">
+      <div className="flex-1 min-w-0 py-2">
         <div className="font-bold text-sm truncate" style={{ fontFamily: 'var(--font-body)', color: '#fff' }}>
           {song.title}
         </div>
@@ -51,7 +50,7 @@ function SongRow({
       </div>
 
       {/* Mood + duration */}
-      <div className="flex flex-col items-end gap-1 shrink-0 pr-2">
+      <div className="flex flex-col items-end gap-1 shrink-0 px-2">
         <span
           className="mood-badge"
           style={{ background: song.moodColor + '22', color: song.moodColor, border: `1px solid ${song.moodColor}44` }}
@@ -63,15 +62,14 @@ function SongRow({
         </span>
       </div>
 
-      {/* Add button — visible on mobile when a setlist is active */}
+      {/* + button — always visible when a setlist is active */}
       {activeSetlistId && (
         <button
           onClick={() => onAdd(song.id)}
-          className="shrink-0 flex items-center justify-center md:hidden"
+          className="shrink-0 flex items-center justify-center"
           style={{
             width: 36,
-            height: '100%',
-            minHeight: 48,
+            alignSelf: 'stretch',
             background: 'none',
             border: 'none',
             borderLeft: '1px solid #1e1e1e',
@@ -79,6 +77,7 @@ function SongRow({
             fontSize: 22,
             cursor: 'pointer',
             fontFamily: 'var(--font-body)',
+            flexShrink: 0,
           }}
           title="Add to active setlist"
         >
@@ -203,11 +202,11 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd }: Pr
       {/* Status banner */}
       {!activeSetlistId ? (
         <div className="px-3 py-2 text-xs text-center" style={{ background: '#0f0f0f', color: '#888', borderBottom: '1px solid #1a1a1a', fontFamily: 'var(--font-body)' }}>
-          Go to Setlists tab → select a set → come back here to add songs
+          Select a setlist first, then add songs here
         </div>
       ) : (
         <div className="px-3 py-2 text-xs text-center" style={{ background: '#0a1a0a', color: '#00e676', borderBottom: '1px solid #1a1a1a', fontFamily: 'var(--font-body)' }}>
-          Tap <strong>+</strong> to add · Drag on desktop · Double-click on desktop
+          Tap + to add · Drag the ⠿ handle on desktop
         </div>
       )}
 
