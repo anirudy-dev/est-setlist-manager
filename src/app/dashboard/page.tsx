@@ -526,7 +526,7 @@ export default function Dashboard() {
         {/* Nav */}
         <nav style={{ height: 48, borderBottom: '1px solid #1a1a1a', background: '#080808', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', flexShrink: 0 }}>
           <Image
-            src="/est_logo_cropped.png"
+            src="/logo.png"
             alt="Every Second Tuesday"
             width={160}
             height={40}
