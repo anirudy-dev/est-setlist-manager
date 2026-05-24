@@ -23,7 +23,7 @@ import {
   getSetlistsForGig, createSetlist, updateSetlist, deleteSetlist,
   getCustomSongs,
 } from '@/lib/supabase';
-import { exportSetlistPDF, printSetlist } from '@/lib/export';
+import { exportSetlistPDF, exportGigPDF, printSetlist } from '@/lib/export';
 
 import MasterSongList from '@/components/MasterSongList';
 import GigPanel from '@/components/GigPanel';
@@ -35,7 +35,7 @@ type MobileTab = 'songs' | 'gigs' | 'overview';
 export default function Dashboard() {
   const router = useRouter();
 
-  // ── Core state ────────────────────────────────────────────────────────────
+  // ── State ──────────────────────────────────────────────────────────────────
   const [gigs, setGigs] = useState<Gig[]>([]);
   const [setlists, setSetlists] = useState<Setlist[]>([]);
   const [customSongs, setCustomSongs] = useState<Song[]>([]);
@@ -48,9 +48,7 @@ export default function Dashboard() {
   const [mobileTab, setMobileTab] = useState<MobileTab>('gigs');
   const [showAddSong, setShowAddSong] = useState(false);
 
-  // Merged song list — hardcoded + custom, used everywhere
   const allSongs: Song[] = useMemo(() => [...SONGS, ...customSongs], [customSongs]);
-
   const selectedGig = gigs.find(g => g.id === selectedGigId) ?? null;
   const gigSetlists = setlists.filter(s => s.gig_id === selectedGigId);
 
@@ -61,7 +59,7 @@ export default function Dashboard() {
     }
   }, [router]);
 
-  // ── Load gigs + custom songs on mount ─────────────────────────────────────
+  // ── Load gigs + custom songs ───────────────────────────────────────────────
   useEffect(() => {
     setLoadingGigs(true);
     Promise.all([getGigs(), getCustomSongs()])
@@ -84,7 +82,7 @@ export default function Dashboard() {
       .finally(() => setLoadingGigs(false));
   }, []);
 
-  // ── Reload custom songs after adding a new one ─────────────────────────────
+  // ── Reload custom songs after adding ──────────────────────────────────────
   const reloadCustomSongs = useCallback(async () => {
     try {
       const customData = await getCustomSongs();
@@ -119,7 +117,7 @@ export default function Dashboard() {
       .catch(() => setLoadingSetlists(false));
   }, [selectedGigId]);
 
-  // ── Toast helper ───────────────────────────────────────────────────────────
+  // ── Toast ──────────────────────────────────────────────────────────────────
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
@@ -223,6 +221,7 @@ export default function Dashboard() {
     const activeData = active.data.current;
     const overId = String(over.id);
 
+    // ── Case 1: dragging from master song list ─────────────────────────────
     if (activeData?.type === 'master') {
       const targetSetlistId = overId.startsWith('setlist-drop-')
         ? overId.replace('setlist-drop-', '')
@@ -238,21 +237,32 @@ export default function Dashboard() {
       return;
     }
 
-    for (const sl of setlists) {
+    // ── Case 2: reordering within a setlist ───────────────────────────────
+    // activeData.type === 'setlist-song', activeData.setlistId tells us which list
+    if (activeData?.type === 'setlist-song') {
+      const setlistId = activeData.setlistId as string;
+      const sl = setlists.find(s => s.id === setlistId);
+      if (!sl) return;
+
       const activeIdx = sl.songs.findIndex(s => s.instanceId === String(active.id));
       const overIdx = sl.songs.findIndex(s => s.instanceId === overId);
-      if (activeIdx !== -1 && overIdx !== -1) {
+
+      if (activeIdx !== -1 && overIdx !== -1 && activeIdx !== overIdx) {
         const reordered = arrayMove(sl.songs, activeIdx, overIdx).map((s, i) => ({ ...s, position: i }));
         updateSetlistSongs(sl.id, reordered);
-        return;
       }
     }
   };
 
   // ── Export / Print ─────────────────────────────────────────────────────────
-  const handleExport = (sl: Setlist) => {
+  const handleExportSet = (sl: Setlist) => {
     if (!selectedGig) return;
     exportSetlistPDF(sl, selectedGig, allSongs);
+  };
+
+  const handleExportGig = () => {
+    if (!selectedGig || gigSetlists.length === 0) return;
+    exportGigPDF(selectedGig, gigSetlists, allSongs);
   };
 
   const handlePrint = (sl: Setlist) => {
@@ -267,13 +277,13 @@ export default function Dashboard() {
 
   const draggingSong = dragSongId ? allSongs.find(s => s.id === dragSongId) : null;
 
-  // ── Shared column: Setlists ────────────────────────────────────────────────
+  // ── Setlists column ────────────────────────────────────────────────────────
   const SetlistsColumn = (
     <div className="flex flex-col h-full">
       <GigPanel
         gigs={gigs}
         selectedGigId={selectedGigId}
-        onSelectGig={id => { setSelectedGigId(id); setActiveSetlistId(null); setMobileTab('gigs'); }}
+        onSelectGig={id => { setSelectedGigId(id); setActiveSetlistId(null); }}
         onCreate={handleCreateGig}
         onUpdate={handleUpdateGig}
         onDelete={handleDeleteGig}
@@ -282,75 +292,90 @@ export default function Dashboard() {
 
       {selectedGigId && (
         <div className="flex-1 overflow-y-auto p-3">
-          <div className="flex items-center justify-between mb-3">
+          {/* Sets header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <span style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', letterSpacing: '0.1em', color: '#fff' }}>
               SETLISTS
             </span>
-            <button
-              onClick={handleCreateSetlist}
-              style={{
-                fontFamily: 'var(--font-body)', fontSize: 10,
-                background: '#fff', color: '#000', border: 'none',
-                cursor: 'pointer', padding: '5px 12px',
-                letterSpacing: '0.1em', fontWeight: 'bold',
-              }}
-            >
-              + NEW SET
-            </button>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {gigSetlists.length > 0 && (
+                <button
+                  onClick={handleExportGig}
+                  style={{
+                    fontFamily: 'var(--font-body)', fontSize: 10,
+                    background: '#1a1a1a', color: '#aaa',
+                    border: '1px solid #2a2a2a', cursor: 'pointer',
+                    padding: '4px 10px', letterSpacing: '0.08em',
+                  }}
+                  title="Export full gig as PDF"
+                >
+                  GIG PDF
+                </button>
+              )}
+              <button
+                onClick={handleCreateSetlist}
+                style={{
+                  fontFamily: 'var(--font-body)', fontSize: 10,
+                  background: '#fff', color: '#000', border: 'none',
+                  cursor: 'pointer', padding: '4px 10px',
+                  letterSpacing: '0.1em', fontWeight: 'bold',
+                }}
+              >
+                + NEW SET
+              </button>
+            </div>
           </div>
 
           {loadingSetlists ? (
-            <div className="text-xs text-center py-4" style={{ color: '#888', fontFamily: 'var(--font-body)' }}>
+            <div style={{ color: '#555', fontSize: 12, textAlign: 'center', paddingTop: 24, fontFamily: 'var(--font-body)' }}>
               Loading...
             </div>
           ) : gigSetlists.length === 0 ? (
-            <div className="text-xs text-center py-8" style={{ color: '#888', fontFamily: 'var(--font-body)', lineHeight: 2 }}>
+            <div style={{ color: '#333', fontSize: 12, textAlign: 'center', paddingTop: 32, fontFamily: 'var(--font-body)', lineHeight: 2 }}>
               No setlists yet.<br />Create one above.
             </div>
           ) : (
-            gigSetlists.map(sl => (
-              <SetlistPanel
-                key={sl.id}
-                setlist={sl}
-                isActive={activeSetlistId === sl.id}
-                onActivate={() => setActiveSetlistId(sl.id)}
-                onRename={name => handleRenameSetlist(sl.id, name)}
-                onDelete={() => handleDeleteSetlist(sl.id)}
-                onRemoveSong={instanceId => handleRemoveSong(sl.id, instanceId)}
-                onExport={handleExport}
-                onPrint={handlePrint}
-                gigName={selectedGig?.name ?? ''}
-                gigDate={selectedGig?.date ?? ''}
-                gigVenue={selectedGig?.venue ?? ''}
-                allSongs={allSongs}
-              />
-               ))
-          )}
+            <>
+              {gigSetlists.map(sl => (
+                <SetlistPanel
+                  key={sl.id}
+                  setlist={sl}
+                  isActive={activeSetlistId === sl.id}
+                  onActivate={() => setActiveSetlistId(sl.id)}
+                  onRename={name => handleRenameSetlist(sl.id, name)}
+                  onDelete={() => handleDeleteSetlist(sl.id)}
+                  onRemoveSong={instanceId => handleRemoveSong(sl.id, instanceId)}
+                  onExport={handleExportSet}
+                  onPrint={handlePrint}
+                  gigName={selectedGig?.name ?? ''}
+                  gigDate={selectedGig?.date ?? ''}
+                  gigVenue={selectedGig?.venue ?? ''}
+                  allSongs={allSongs}
+                />
+              ))}
 
-          {/* Total gig length */}
-          {gigSetlists.length > 0 && (
-            <div style={{
-              borderTop: '1px solid #2a2a2a',
-              margin: '4px 0 8px',
-              padding: '10px 12px 4px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'baseline',
-            }}>
-              <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: '#555', letterSpacing: '0.08em' }}>
-                TOTAL GIG
-              </span>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: '#ff3d6e' }}>
-                {(() => {
-                  const secs = gigSetlists.reduce((acc, sl) =>
-                    acc + sl.songs.reduce((a, item) => {
-                      const s = allSongs.find(song => song.id === item.songId);
-                      return a + (s?.duration ?? 0);
-                    }, 0), 0);
-                  return `${Math.floor(secs / 60)}m ${secs % 60}s`;
-                })()}
-              </span>
-            </div>
+              {/* Total gig length */}
+              {(() => {
+                const gigTotalSecs = gigSetlists.reduce((acc, sl) =>
+                  acc + sl.songs.reduce((a, item) => {
+                    const s = allSongs.find(song => song.id === item.songId);
+                    return a + (s?.duration ?? 0);
+                  }, 0), 0);
+                return (
+                  <div style={{
+                    borderTop: '1px solid #2a2a2a', marginTop: 4, padding: '10px 4px 4px',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+                  }}>
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: '#444', letterSpacing: '0.08em' }}>
+                      TOTAL GIG
+                    </span>
+                    <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: '#ff3d6e' }}>
+                      {Math.floor(gigTotalSecs / 60)}m {gigTotalSecs % 60}s
+                    </span>
+                  </div>
+                );
+              })()}
+            </>
           )}
         </div>
       )}
@@ -358,10 +383,10 @@ export default function Dashboard() {
       {!selectedGigId && (
         <div className="flex-1 flex items-center justify-center p-6 text-center">
           <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', letterSpacing: '0.2em', color: '#333' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', letterSpacing: '0.2em', color: '#2a2a2a' }}>
               SELECT A GIG
             </div>
-            <div className="mt-2 text-sm" style={{ color: '#555', fontFamily: 'var(--font-body)' }}>
+            <div style={{ color: '#444', fontSize: 12, fontFamily: 'var(--font-body)', marginTop: 6 }}>
               or create a new one above
             </div>
           </div>
@@ -370,94 +395,121 @@ export default function Dashboard() {
     </div>
   );
 
-  // ── Shared column: Overview ────────────────────────────────────────────────
+  // ── Overview column — condensed cheat sheet ────────────────────────────────
   const OverviewColumn = (
-    <div className="p-4 overflow-y-auto h-full">
+    <div style={{ padding: '16px 14px', overflowY: 'auto', height: '100%' }}>
       {!selectedGigId ? (
-        <div className="flex flex-col items-center justify-center h-full text-center gap-6">
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center', gap: 16 }}>
           <Image
             src="/est_logo_cropped.png"
             alt="EST"
-            width={240}
-            height={60}
-            className="opacity-10 w-48 h-auto"
-            style={{ mixBlendMode: 'lighten' }}
+            width={180}
+            height={45}
+            style={{ width: 140, height: 'auto', mixBlendMode: 'lighten', opacity: 0.08 }}
           />
-          <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', letterSpacing: '0.15em', color: '#222' }}>
-              EVERY SECOND TUESDAY
-            </div>
-            <div className="mt-2 text-sm" style={{ color: '#333', fontFamily: 'var(--font-body)' }}>
-              {allSongs.length} songs · 5 decades · 1 loud night
-            </div>
-          </div>
-          <div className="text-sm" style={{ color: '#444', fontFamily: 'var(--font-body)', lineHeight: 2 }}>
-            1. Create a gig<br />
-            2. Add setlists<br />
-            3. Drag songs in<br />
-            4. Export or print
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', letterSpacing: '0.15em', color: '#1e1e1e' }}>
+            SELECT A GIG TO SEE YOUR CHEAT SHEET
           </div>
         </div>
-      ) : selectedGig ? (
+      ) : (
         <div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', letterSpacing: '0.12em', color: '#fff', marginBottom: 4 }}>
-            {selectedGig.name}
+          {/* Gig name */}
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', letterSpacing: '0.12em', color: '#fff', marginBottom: 2 }}>
+            {selectedGig?.name}
           </div>
-          {selectedGig.date && (
-            <div style={{ color: '#555', fontSize: 12, fontFamily: 'var(--font-body)', marginBottom: 2 }}>{selectedGig.date}</div>
-          )}
-          {selectedGig.venue && (
-            <div style={{ color: '#555', fontSize: 12, fontFamily: 'var(--font-body)', marginBottom: 16 }}>{selectedGig.venue}</div>
-          )}
-          {selectedGig.notes && (
-            <div style={{ color: '#444', fontSize: 12, fontFamily: 'var(--font-body)', marginBottom: 20, lineHeight: 1.6 }}>
-              {selectedGig.notes}
+          {(selectedGig?.date || selectedGig?.venue) && (
+            <div style={{ color: '#444', fontSize: 11, fontFamily: 'var(--font-body)', marginBottom: 14 }}>
+              {[selectedGig?.date, selectedGig?.venue].filter(Boolean).join(' · ')}
             </div>
           )}
 
-          <div style={{ borderTop: '1px solid #1e1e1e', paddingTop: 16 }}>
-            {gigSetlists.map(sl => {
-              const totalSecs = sl.songs.reduce((acc, item) => {
+          {gigSetlists.length === 0 ? (
+            <div style={{ color: '#2a2a2a', fontSize: 12, fontFamily: 'var(--font-body)', marginTop: 20 }}>
+              No setlists yet.
+            </div>
+          ) : (
+            gigSetlists.map((sl, slIndex) => {
+              const setTotalSecs = sl.songs.reduce((acc, item) => {
                 const s = allSongs.find(song => song.id === item.songId);
                 return acc + (s?.duration ?? 0);
               }, 0);
+
               return (
-                <div key={sl.id} style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                    <span style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', letterSpacing: '0.1em', color: '#fff' }}>
+                <div key={sl.id} style={{ marginBottom: 18 }}>
+                  {/* Set header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderBottom: '1px solid #1e1e1e', paddingBottom: 4, marginBottom: 6 }}>
+                    <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.85rem', letterSpacing: '0.12em', color: '#888' }}>
                       {sl.name}
                     </span>
-                    <span style={{ fontFamily: 'var(--font-display)', color: '#ff3d6e', fontSize: '1.1rem' }}>
-                      {Math.floor(totalSecs / 60)}:{String(totalSecs % 60).padStart(2, '0')}
+                    <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.85rem', color: '#ff3d6e' }}>
+                      {Math.floor(setTotalSecs / 60)}m {setTotalSecs % 60}s
                     </span>
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {sl.songs.slice(0, 8).map(item => {
-                      const s = allSongs.find(song => song.id === item.songId);
-                      return s ? (
-                        <span
-                          key={item.instanceId}
-                          style={{
-                            fontSize: 10, padding: '2px 6px', borderRadius: 2,
-                            background: '#1a1a1a', color: '#666', fontFamily: 'var(--font-body)',
-                          }}
-                        >
-                          {s.title}
-                        </span>
-                      ) : null;
-                    })}
-                    {sl.songs.length > 8 && (
-                      <span style={{ fontSize: 10, color: '#444', fontFamily: 'var(--font-body)' }}>
-                        +{sl.songs.length - 8} more
-                      </span>
-                    )}
-                  </div>
+
+                  {/* Song list — just numbers and names */}
+                  {sl.songs.length === 0 ? (
+                    <div style={{ color: '#2a2a2a', fontSize: 11, fontFamily: 'var(--font-body)', fontStyle: 'italic' }}>
+                      No songs yet
+                    </div>
+                  ) : (
+                    <div>
+                      {sl.songs.map((item, i) => {
+                        const song = allSongs.find(s => s.id === item.songId);
+                        if (!song) return null;
+                        return (
+                          <div
+                            key={item.instanceId}
+                            style={{
+                              display: 'flex', alignItems: 'baseline', gap: 8,
+                              padding: '3px 0',
+                              borderBottom: i < sl.songs.length - 1 ? '1px solid #111' : 'none',
+                            }}
+                          >
+                            <span style={{ color: '#2a2a2a', fontSize: 10, fontFamily: 'var(--font-body)', width: 16, textAlign: 'right', flexShrink: 0 }}>
+                              {i + 1}
+                            </span>
+                            <span style={{ color: '#ccc', fontSize: 12, fontFamily: 'var(--font-body)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {song.title}
+                            </span>
+                            <span style={{ color: '#333', fontSize: 10, fontFamily: 'var(--font-body)', flexShrink: 0 }}>
+                              {Math.floor(song.duration / 60)}:{String(song.duration % 60).padStart(2, '0')}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Spacer between sets */}
+                  {slIndex < gigSetlists.length - 1 && (
+                    <div style={{ height: 8 }} />
+                  )}
                 </div>
               );
-            })}
-          </div>
+            })
+          )}
+
+          {/* Total gig summary */}
+          {gigSetlists.length > 0 && (() => {
+            const gigTotalSecs = gigSetlists.reduce((acc, sl) =>
+              acc + sl.songs.reduce((a, item) => {
+                const s = allSongs.find(song => song.id === item.songId);
+                return a + (s?.duration ?? 0);
+              }, 0), 0);
+            const totalSongs = gigSetlists.reduce((a, sl) => a + sl.songs.length, 0);
+            return (
+              <div style={{ borderTop: '1px solid #1e1e1e', marginTop: 8, paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ color: '#333', fontSize: 10, fontFamily: 'var(--font-body)', letterSpacing: '0.08em' }}>
+                  {totalSongs} SONGS TOTAL
+                </span>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: '#ff3d6e' }}>
+                  {Math.floor(gigTotalSecs / 60)}m {gigTotalSecs % 60}s
+                </span>
+              </div>
+            );
+          })()}
         </div>
-      ) : null}
+      )}
     </div>
   );
 
@@ -469,15 +521,12 @@ export default function Dashboard() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex flex-col h-screen" style={{ background: '#0a0a0a', color: '#fff' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#0a0a0a', color: '#fff' }}>
 
         {/* Nav */}
-        <nav
-          className="flex items-center justify-between px-4 shrink-0 no-print"
-          style={{ height: 48, borderBottom: '1px solid #1e1e1e', background: '#080808' }}
-        >
+        <nav style={{ height: 48, borderBottom: '1px solid #1a1a1a', background: '#080808', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', flexShrink: 0 }}>
           <Image
-            src="/logo.png"
+            src="/est_logo_cropped.png"
             alt="Every Second Tuesday"
             width={160}
             height={40}
@@ -485,17 +534,16 @@ export default function Dashboard() {
           />
           <button
             onClick={handleLogout}
-            className="text-xs uppercase tracking-widest"
-            style={{ fontFamily: 'var(--font-body)', background: 'none', border: '1px solid #2a2a2a', color: '#aaa', cursor: 'pointer', padding: '4px 12px' }}
+            style={{ fontFamily: 'var(--font-body)', background: 'none', border: '1px solid #2a2a2a', color: '#666', cursor: 'pointer', padding: '4px 12px', fontSize: 11, letterSpacing: '0.08em' }}
           >
-            Logout
+            LOGOUT
           </button>
         </nav>
 
         {/* ── DESKTOP: three columns ── */}
-        <div className="hidden md:flex flex-1 min-h-0">
-          {/* Songs column — wider with Add Song button */}
-          <div className="w-80 shrink-0 flex flex-col min-h-0">
+        <div className="hidden md:flex" style={{ flex: 1, minHeight: 0 }}>
+          {/* Songs — narrower */}
+          <div style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0, borderRight: '1px solid #1a1a1a' }}>
             <MasterSongList
               activeSetlistId={activeSetlistId}
               onDoubleClickAdd={addSongToActive}
@@ -503,21 +551,21 @@ export default function Dashboard() {
               onOpenAddSong={() => setShowAddSong(true)}
             />
           </div>
-          {/* Gig + Setlists column */}
-          <div className="w-96 shrink-0 flex flex-col min-h-0 overflow-y-auto" style={{ borderRight: '1px solid #1e1e1e' }}>
+          {/* Setlists — widest */}
+          <div style={{ width: 420, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0, overflowY: 'auto', borderRight: '1px solid #1a1a1a' }}>
             {SetlistsColumn}
           </div>
-          {/* Overview column */}
-          <div className="flex-1 flex flex-col min-h-0">
+          {/* Overview cheat sheet — takes remaining space */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             {OverviewColumn}
           </div>
         </div>
 
-        {/* ── MOBILE: tab layout ── */}
-        <div className="flex md:hidden flex-1 flex-col min-h-0">
-          <div className="flex-1 min-h-0 overflow-hidden">
+        {/* ── MOBILE: tabs ── */}
+        <div className="flex md:hidden" style={{ flex: 1, flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
             {mobileTab === 'songs' && (
-              <div className="h-full">
+              <div style={{ height: '100%' }}>
                 <MasterSongList
                   activeSetlistId={activeSetlistId}
                   onDoubleClickAdd={id => { addSongToActive(id); setMobileTab('gigs'); }}
@@ -527,37 +575,32 @@ export default function Dashboard() {
               </div>
             )}
             {mobileTab === 'gigs' && (
-              <div className="h-full overflow-y-auto">{SetlistsColumn}</div>
+              <div style={{ height: '100%', overflowY: 'auto' }}>{SetlistsColumn}</div>
             )}
             {mobileTab === 'overview' && (
-              <div className="h-full">{OverviewColumn}</div>
+              <div style={{ height: '100%' }}>{OverviewColumn}</div>
             )}
           </div>
 
           {/* Bottom tab bar */}
-          <div
-            className="shrink-0 grid grid-cols-3 no-print"
-            style={{ background: '#0a0a0a', borderTop: '1px solid #1e1e1e', height: 56 }}
-          >
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', background: '#0a0a0a', borderTop: '1px solid #1a1a1a', height: 56, flexShrink: 0 }}>
             {([
               { id: 'songs', label: 'SONGS', icon: '♪' },
-              { id: 'gigs', label: 'SETLISTS', icon: '≡' },
-              { id: 'overview', label: 'OVERVIEW', icon: '◈' },
+              { id: 'gigs', label: 'SETS', icon: '≡' },
+              { id: 'overview', label: 'SHEET', icon: '◈' },
             ] as const).map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setMobileTab(tab.id)}
-                className="flex flex-col items-center justify-center gap-0.5"
                 style={{
                   background: 'none', border: 'none', cursor: 'pointer',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
                   borderTop: mobileTab === tab.id ? '2px solid #ff3d6e' : '2px solid transparent',
-                  color: mobileTab === tab.id ? '#fff' : '#666',
+                  color: mobileTab === tab.id ? '#fff' : '#555',
                 }}
               >
                 <span style={{ fontSize: 16 }}>{tab.icon}</span>
-                <span style={{ fontFamily: 'var(--font-body)', fontSize: 9, letterSpacing: '0.08em' }}>
-                  {tab.label}
-                </span>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: 9, letterSpacing: '0.08em' }}>{tab.label}</span>
               </button>
             ))}
           </div>
@@ -567,31 +610,21 @@ export default function Dashboard() {
       {/* Drag overlay */}
       <DragOverlay>
         {draggingSong ? (
-          <div
-            style={{
-              background: '#1a1a1a', border: '1px solid #ff3d6e',
-              color: '#fff', padding: '8px 12px', minWidth: 200,
-              fontFamily: 'var(--font-body)', boxShadow: '0 8px 24px rgba(0,0,0,0.8)',
-            }}
-          >
+          <div style={{ background: '#1a1a1a', border: '1px solid #ff3d6e', color: '#fff', padding: '8px 12px', minWidth: 200, fontFamily: 'var(--font-body)', boxShadow: '0 8px 24px rgba(0,0,0,0.8)' }}>
             <div style={{ fontWeight: 'bold', fontSize: 13 }}>{draggingSong.title}</div>
-            <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
-              {draggingSong.artist} · {formatDuration(draggingSong.duration)}
-            </div>
+            <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{draggingSong.artist} · {formatDuration(draggingSong.duration)}</div>
           </div>
         ) : null}
       </DragOverlay>
 
       {/* Toast */}
       {toast && (
-        <div
-          className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 text-sm no-print"
-          style={{
-            background: '#1a1a1a', border: '1px solid #333',
-            color: '#fff', fontFamily: 'var(--font-body)',
-            zIndex: 9999, letterSpacing: '0.05em',
-          }}
-        >
+        <div style={{
+          position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+          background: '#1a1a1a', border: '1px solid #2a2a2a', color: '#fff',
+          padding: '8px 16px', fontFamily: 'var(--font-body)', fontSize: 12,
+          zIndex: 9999, letterSpacing: '0.05em', whiteSpace: 'nowrap',
+        }}>
           {toast}
         </div>
       )}
