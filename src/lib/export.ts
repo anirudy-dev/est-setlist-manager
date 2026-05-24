@@ -7,7 +7,7 @@ import { formatDuration, formatTotalDuration } from '@/data/songs';
 
 async function getLogoBase64(): Promise<string | null> {
   try {
-    const response = await fetch(window.location.origin + '/est_logo_cropped.png');
+    const response = await fetch(window.location.origin + '/logo.png');
     const blob = await response.blob();
     return await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -112,6 +112,7 @@ export async function exportSetlistPDF(setlist: Setlist, gig: Gig, allSongs: Son
 // ── Gig-level PDF export ──────────────────────────────────────────────────────
 
 export async function exportGigPDF(gig: Gig, setlists: Setlist[], allSongs: Song[]) {
+  try {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const margin = 14;
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -187,8 +188,11 @@ export async function exportGigPDF(gig: Gig, setlists: Setlist[], allSongs: Song
   );
 
   doc.save(`${gig.name}-full-gig.pdf`.replace(/\s+/g, '-').toLowerCase());
+}catch (e) {
+    console.error('exportGigPDF failed:', e);
+    throw e;
+  }
 }
-
 // ── Print (set level) ─────────────────────────────────────────────────────────
 
 export function printSetlist(setlist: Setlist, gig: Gig, allSongs: Song[]) {
