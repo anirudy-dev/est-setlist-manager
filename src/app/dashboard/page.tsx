@@ -260,10 +260,16 @@ export default function Dashboard() {
     exportSetlistPDF(sl, selectedGig, allSongs);
   };
 
-  const handleExportGig = () => {
-    if (!selectedGig || gigSetlists.length === 0) return;
-    exportGigPDF(selectedGig, gigSetlists, allSongs);
-  };
+  const handleExportGig = async () => {
+  if (!selectedGig || gigSetlists.length === 0) return;
+  try {
+    showToast('Generating PDF...');
+    await exportGigPDF(selectedGig, gigSetlists, allSongs);
+  } catch (e) {
+    console.error('Gig PDF error:', e);
+    showToast('Error generating PDF');
+  }
+};
 
   const handlePrint = (sl: Setlist) => {
     if (!selectedGig) return;
