@@ -7,7 +7,7 @@ import { formatDuration, formatTotalDuration } from '@/data/songs';
 
 async function getLogoBase64(): Promise<string | null> {
   try {
-    const response = await fetch(window.location.origin + '/logo.png');
+    const response = await fetch(window.location.origin + '/logo_black.png');
     const blob = await response.blob();
     return await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
