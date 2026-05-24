@@ -6,79 +6,116 @@ import { CSS } from '@dnd-kit/utilities';
 import { Setlist, SetlistSong, Song } from '@/types';
 import { formatDuration, formatTotalDuration } from '@/data/songs';
 
-// ── Sortable song row inside a setlist ────────────────────────────────────────
+// ── Sortable song row ─────────────────────────────────────────────────────────
 
 function SetlistSongRow({
   item,
   index,
+  setlistId,
   onRemove,
   allSongs,
 }: {
   item: SetlistSong;
   index: number;
+  setlistId: string;
   onRemove: () => void;
   allSongs: Song[];
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  // setActivatorNodeRef makes ONLY the drag handle trigger dragging
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: item.instanceId,
+    data: { type: 'setlist-song', setlistId },
   });
 
   const song = allSongs.find(s => s.id === item.songId);
   if (!song) return null;
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-  };
-
   return (
     <div
       ref={setNodeRef}
-      style={style}
-      className="flex items-center gap-2 px-3 py-2 group"
-      {...attributes}
-      {...listeners}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.35 : 1,
+        borderBottom: '1px solid rgba(255,255,255,0.03)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '8px 12px 8px 8px',
+        background: isDragging ? '#1a1a1a' : 'transparent',
+      }}
     >
-      <span
-        className="text-xs tabular-nums shrink-0 w-5 text-right"
-        style={{ color: '#444', fontFamily: 'var(--font-body)' }}
-      >
+      {/* Index */}
+      <span style={{
+        color: '#3a3a3a', fontSize: 11, fontFamily: 'var(--font-body)',
+        width: 18, textAlign: 'right', flexShrink: 0, userSelect: 'none',
+      }}>
         {index + 1}
       </span>
-      <span className="text-xs shrink-0" style={{ color: '#333', cursor: 'grab' }}>⠿</span>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-bold truncate" style={{ fontFamily: 'var(--font-body)', color: '#fff' }}>
+
+      {/* Drag handle — this is the ONLY element that triggers dragging */}
+      <span
+        ref={setActivatorNodeRef}
+        {...listeners}
+        {...attributes}
+        style={{
+          color: '#2a2a2a', cursor: 'grab', fontSize: 14, flexShrink: 0,
+          userSelect: 'none', touchAction: 'none', padding: '0 2px',
+        }}
+        title="Drag to reorder"
+      >
+        ⠿
+      </span>
+
+      {/* Song info */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontFamily: 'var(--font-body)', color: '#fff', fontSize: 13,
+          fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
           {song.title}
         </div>
-        <div className="text-xs truncate" style={{ color: '#aaa' }}>
+        <div style={{
+          color: '#555', fontSize: 11, fontFamily: 'var(--font-body)', marginTop: 1,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
           {song.artist}
         </div>
       </div>
-      <div className="flex flex-col items-end gap-1 shrink-0">
-        <span
-          className="mood-badge"
-          style={{
-            background: song.moodColor + '22',
-            color: song.moodColor,
-            border: `1px solid ${song.moodColor}44`,
-            fontSize: 9,
-            padding: '1px 5px',
-            borderRadius: 2,
-            fontFamily: 'var(--font-body)',
-          }}
-        >
+
+      {/* Mood + duration */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
+        <span style={{
+          background: song.moodColor + '22', color: song.moodColor,
+          border: `1px solid ${song.moodColor}44`,
+          fontSize: 9, padding: '1px 5px', borderRadius: 2, fontFamily: 'var(--font-body)',
+        }}>
           {song.mood}
         </span>
-        <span className="text-xs tabular-nums" style={{ color: '#aaa', fontFamily: 'var(--font-body)' }}>
+        <span style={{ color: '#555', fontSize: 11, fontFamily: 'var(--font-body)' }}>
           {formatDuration(song.duration)}
         </span>
       </div>
+
+      {/* Remove — stopPropagation prevents accidental drag trigger */}
       <button
         onPointerDown={e => e.stopPropagation()}
         onClick={onRemove}
-        className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity w-6 h-6 flex items-center justify-center"
-        style={{ color: '#ff3d6e', background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}
+        style={{
+          background: 'none', border: 'none', color: '#2a2a2a', cursor: 'pointer',
+          fontSize: 18, flexShrink: 0, padding: '0 2px', lineHeight: 1,
+          transition: 'color 0.15s',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.color = '#ff3d6e')}
+        onMouseLeave={e => (e.currentTarget.style.color = '#2a2a2a')}
         title="Remove"
       >
         ×
@@ -130,55 +167,50 @@ export default function SetlistPanel({
     return acc + (s?.duration ?? 0);
   }, 0);
 
-  const itemIds = setlist.songs.map(s => s.instanceId);
-
   const handleRenameSubmit = () => {
     if (newName.trim()) onRename(newName.trim());
     setRenaming(false);
   };
 
   return (
-    <div
-      className="flex flex-col mb-3"
-      style={{
-        background: isActive ? '#141414' : '#0c0c0c',
-        border: isActive ? '1px solid #2a2a2a' : '1px solid #161616',
-        borderRadius: 4,
-      }}
-    >
+    <div style={{
+      background: isActive ? '#131313' : '#0b0b0b',
+      border: isActive ? '1px solid #2a2a2a' : '1px solid #151515',
+      borderRadius: 4,
+      marginBottom: 10,
+    }}>
       {/* Header */}
       <div
         onClick={onActivate}
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '8px 10px',
-          cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '8px 10px', cursor: 'pointer',
           borderBottom: collapsed ? 'none' : '1px solid #1a1a1a',
         }}
       >
         {/* Collapse toggle */}
         <button
+          onPointerDown={e => e.stopPropagation()}
           onClick={e => { e.stopPropagation(); setCollapsed(p => !p); }}
           style={{
-            background: 'none', border: 'none', color: '#555',
-            cursor: 'pointer', fontSize: 10, padding: 0, flexShrink: 0,
-            fontFamily: 'var(--font-body)',
+            background: 'none', border: 'none', color: '#444', cursor: 'pointer',
+            fontSize: 9, padding: 0, flexShrink: 0, fontFamily: 'var(--font-body)',
           }}
-          title={collapsed ? 'Expand' : 'Collapse'}
         >
           {collapsed ? '▶' : '▼'}
         </button>
 
-        {/* Name / rename input */}
+        {/* Name or rename input */}
         {renaming ? (
           <input
             autoFocus
             value={newName}
             onChange={e => setNewName(e.target.value)}
             onBlur={handleRenameSubmit}
-            onKeyDown={e => { if (e.key === 'Enter') handleRenameSubmit(); if (e.key === 'Escape') setRenaming(false); }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') handleRenameSubmit();
+              if (e.key === 'Escape') setRenaming(false);
+            }}
             onClick={e => e.stopPropagation()}
             style={{
               flex: 1, background: '#1a1a1a', border: '1px solid #ff3d6e',
@@ -187,130 +219,87 @@ export default function SetlistPanel({
             }}
           />
         ) : (
-          <span
-            style={{
-              flex: 1, fontFamily: 'var(--font-display)', fontSize: '0.9rem',
-              letterSpacing: '0.1em', color: isActive ? '#fff' : '#888',
-            }}
-          >
+          <span style={{
+            flex: 1, fontFamily: 'var(--font-display)', fontSize: '0.9rem',
+            letterSpacing: '0.1em', color: isActive ? '#fff' : '#666',
+          }}>
             {setlist.name}
           </span>
         )}
 
-        {/* Song count when collapsed */}
+        {/* Summary when collapsed */}
         {collapsed && (
-          <span style={{ color: '#444', fontSize: 11, fontFamily: 'var(--font-body)', flexShrink: 0 }}>
-            {setlist.songs.length} {setlist.songs.length === 1 ? 'song' : 'songs'} · {formatTotalDuration(totalSecs)}
+          <span style={{ color: '#3a3a3a', fontSize: 11, fontFamily: 'var(--font-body)', flexShrink: 0 }}>
+            {setlist.songs.length} songs · {formatTotalDuration(totalSecs)}
           </span>
         )}
 
-        {/* Active indicator */}
+        {/* Active pill */}
         {isActive && !collapsed && (
-          <span style={{ color: '#00e676', fontSize: 10, fontFamily: 'var(--font-body)', flexShrink: 0 }}>
+          <span style={{ color: '#00e676', fontSize: 9, fontFamily: 'var(--font-body)', flexShrink: 0 }}>
             ● ACTIVE
           </span>
         )}
 
         {/* Action buttons */}
-        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-          <button
-            onClick={() => setRenaming(true)}
-            style={btnStyle}
-            title="Rename"
-          >
-            ✎
-          </button>
-          <button
-            onClick={() => onExport(setlist)}
-            style={btnStyle}
-            title="Export PDF"
-          >
-            PDF
-          </button>
-          <button
-            onClick={() => onPrint(setlist)}
-            style={btnStyle}
-            title="Print"
-          >
-            ⎙
-          </button>
+        <div
+          style={{ display: 'flex', gap: 4, flexShrink: 0 }}
+          onPointerDown={e => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
+        >
+          <button onClick={() => setRenaming(true)} style={btn}>✎</button>
+          <button onClick={() => onExport(setlist)} style={btn}>PDF</button>
+          <button onClick={() => onPrint(setlist)} style={btn}>⎙</button>
           {showConfirmDelete ? (
             <>
-              <button
-                onClick={() => { onDelete(); setShowConfirmDelete(false); }}
-                style={{ ...btnStyle, color: '#ff3d6e', borderColor: '#ff3d6e' }}
-              >
-                ✓
-              </button>
-              <button
-                onClick={() => setShowConfirmDelete(false)}
-                style={btnStyle}
-              >
-                ✕
-              </button>
+              <button onClick={() => { onDelete(); setShowConfirmDelete(false); }} style={{ ...btn, color: '#ff3d6e', borderColor: '#ff3d6e' }}>✓</button>
+              <button onClick={() => setShowConfirmDelete(false)} style={btn}>✕</button>
             </>
           ) : (
-            <button
-              onClick={() => setShowConfirmDelete(true)}
-              style={btnStyle}
-              title="Delete setlist"
-            >
-              🗑
-            </button>
+            <button onClick={() => setShowConfirmDelete(true)} style={btn} title="Delete">🗑</button>
           )}
         </div>
       </div>
 
-      {/* Duration bar — hidden when collapsed */}
+      {/* Duration */}
       {!collapsed && (
-        <div
-          style={{
-            padding: '4px 10px',
-            display: 'flex',
-            justifyContent: 'flex-end',
-            borderBottom: '1px solid #1a1a1a',
-          }}
-        >
-          <span
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: '1.4rem',
-              letterSpacing: '0.08em',
-              color: '#ff3d6e',
-            }}
-          >
+        <div style={{
+          padding: '4px 12px', display: 'flex', justifyContent: 'flex-end',
+          borderBottom: '1px solid #1a1a1a',
+        }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', letterSpacing: '0.08em', color: '#ff3d6e' }}>
             {formatTotalDuration(totalSecs)}
           </span>
         </div>
       )}
 
-      {/* Drop zone + song list — hidden when collapsed */}
+      {/* Drop zone + song list */}
       {!collapsed && (
         <div
           ref={setNodeRef}
           style={{
-            minHeight: setlist.songs.length === 0 ? 80 : 'auto',
-            border: isOver ? '1px dashed rgba(255,61,110,0.4)' : '1px dashed transparent',
+            minHeight: setlist.songs.length === 0 ? 72 : undefined,
+            border: isOver ? '1px dashed rgba(255,61,110,0.5)' : '1px dashed transparent',
             margin: 4,
-            transition: 'all 0.15s ease',
+            borderRadius: 3,
+            transition: 'border 0.15s ease',
           }}
         >
           {setlist.songs.length === 0 ? (
-            <div
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                height: 80, color: '#333', fontSize: 12, fontFamily: 'var(--font-body)',
-              }}
-            >
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              height: 72, color: '#2a2a2a', fontSize: 12, fontFamily: 'var(--font-body)',
+            }}>
               {isOver ? '↓ Drop here' : 'Drag songs here · or tap + on a song'}
             </div>
           ) : (
-            <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+            <SortableContext items={setlist.songs.map(s => s.instanceId)} strategy={verticalListSortingStrategy}>
               {setlist.songs.map((item, index) => (
                 <SetlistSongRow
                   key={item.instanceId}
                   item={item}
                   index={index}
+                  setlistId={setlist.id}
                   onRemove={() => onRemoveSong(item.instanceId)}
                   allSongs={allSongs}
                 />
@@ -323,14 +312,8 @@ export default function SetlistPanel({
   );
 }
 
-const btnStyle: React.CSSProperties = {
-  background: '#1a1a1a',
-  border: '1px solid #2a2a2a',
-  color: '#888',
-  borderRadius: 3,
-  padding: '4px 8px',
-  fontSize: 11,
-  fontFamily: 'var(--font-body)',
-  cursor: 'pointer',
-  letterSpacing: '0.04em',
+const btn: React.CSSProperties = {
+  background: '#1a1a1a', border: '1px solid #2a2a2a', color: '#777',
+  borderRadius: 3, padding: '5px 9px', fontSize: 11,
+  fontFamily: 'var(--font-body)', cursor: 'pointer', letterSpacing: '0.04em',
 };
