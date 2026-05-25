@@ -6,8 +6,6 @@ import { CSS } from '@dnd-kit/utilities';
 import { Setlist, SetlistSong, Song } from '@/types';
 import { formatDuration, formatTotalDuration } from '@/data/songs';
 
-// ── Sortable song row ─────────────────────────────────────────────────────────
-
 function SetlistSongRow({
   item,
   index,
@@ -21,7 +19,6 @@ function SetlistSongRow({
   onRemove: () => void;
   allSongs: Song[];
 }) {
-  // setActivatorNodeRef makes ONLY the drag handle trigger dragging
   const {
     attributes,
     listeners,
@@ -44,60 +41,40 @@ function SetlistSongRow({
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.35 : 1,
-        borderBottom: '1px solid rgba(255,255,255,0.03)',
+        opacity: isDragging ? 0.3 : 1,
         display: 'flex',
         alignItems: 'center',
         gap: 8,
-        padding: '8px 12px 8px 8px',
-        background: isDragging ? '#1a1a1a' : 'transparent',
+        padding: '7px 10px 7px 6px',
+        borderBottom: '1px solid rgba(255,255,255,0.03)',
+        background: isDragging ? '#1c1c1c' : 'transparent',
       }}
     >
-      {/* Index */}
-      <span style={{
-        color: '#3a3a3a', fontSize: 11, fontFamily: 'var(--font-body)',
-        width: 18, textAlign: 'right', flexShrink: 0, userSelect: 'none',
-      }}>
+      <span style={{ color: '#2a2a2a', fontSize: 10, width: 18, textAlign: 'right', flexShrink: 0, userSelect: 'none' }}>
         {index + 1}
       </span>
 
-      {/* Drag handle — this is the ONLY element that triggers dragging */}
+      {/* Only this handle triggers drag */}
       <span
         ref={setActivatorNodeRef}
-        {...listeners}
         {...attributes}
-        style={{
-          color: '#2a2a2a', cursor: 'grab', fontSize: 14, flexShrink: 0,
-          userSelect: 'none', touchAction: 'none', padding: '0 2px',
-        }}
-        title="Drag to reorder"
+        {...listeners}
+        style={{ color: '#2a2a2a', cursor: 'grab', fontSize: 14, flexShrink: 0, touchAction: 'none', userSelect: 'none', padding: '0 3px' }}
       >
         ⠿
       </span>
 
-      {/* Song info */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontFamily: 'var(--font-body)', color: '#fff', fontSize: 13,
-          fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
+        <div style={{ color: '#fff', fontSize: 13, fontWeight: 'bold', fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {song.title}
         </div>
-        <div style={{
-          color: '#555', fontSize: 11, fontFamily: 'var(--font-body)', marginTop: 1,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
+        <div style={{ color: '#555', fontSize: 11, fontFamily: 'var(--font-body)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {song.artist}
         </div>
       </div>
 
-      {/* Mood + duration */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
-        <span style={{
-          background: song.moodColor + '22', color: song.moodColor,
-          border: `1px solid ${song.moodColor}44`,
-          fontSize: 9, padding: '1px 5px', borderRadius: 2, fontFamily: 'var(--font-body)',
-        }}>
+        <span style={{ background: song.moodColor + '22', color: song.moodColor, border: `1px solid ${song.moodColor}44`, fontSize: 9, padding: '1px 5px', borderRadius: 2, fontFamily: 'var(--font-body)' }}>
           {song.mood}
         </span>
         <span style={{ color: '#555', fontSize: 11, fontFamily: 'var(--font-body)' }}>
@@ -105,26 +82,18 @@ function SetlistSongRow({
         </span>
       </div>
 
-      {/* Remove — stopPropagation prevents accidental drag trigger */}
       <button
         onPointerDown={e => e.stopPropagation()}
         onClick={onRemove}
-        style={{
-          background: 'none', border: 'none', color: '#2a2a2a', cursor: 'pointer',
-          fontSize: 18, flexShrink: 0, padding: '0 2px', lineHeight: 1,
-          transition: 'color 0.15s',
-        }}
+        style={{ background: 'none', border: 'none', color: '#2a2a2a', cursor: 'pointer', fontSize: 18, flexShrink: 0, padding: '0 2px', lineHeight: 1, transition: 'color 0.15s' }}
         onMouseEnter={e => (e.currentTarget.style.color = '#ff3d6e')}
         onMouseLeave={e => (e.currentTarget.style.color = '#2a2a2a')}
-        title="Remove"
       >
         ×
       </button>
     </div>
   );
 }
-
-// ── SetlistPanel ──────────────────────────────────────────────────────────────
 
 interface SetlistPanelProps {
   setlist: Setlist;
@@ -154,7 +123,7 @@ export default function SetlistPanel({
 }: SetlistPanelProps) {
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState(setlist.name);
-  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
   const { setNodeRef, isOver } = useDroppable({
@@ -167,129 +136,89 @@ export default function SetlistPanel({
     return acc + (s?.duration ?? 0);
   }, 0);
 
-  const handleRenameSubmit = () => {
+  const submitRename = () => {
     if (newName.trim()) onRename(newName.trim());
     setRenaming(false);
   };
 
   return (
-    <div style={{
-      background: isActive ? '#131313' : '#0b0b0b',
-      border: isActive ? '1px solid #2a2a2a' : '1px solid #151515',
-      borderRadius: 4,
-      marginBottom: 10,
-    }}>
+    <div style={{ background: isActive ? '#131313' : '#0b0b0b', border: isActive ? '1px solid #2a2a2a' : '1px solid #161616', borderRadius: 4, marginBottom: 10 }}>
+
       {/* Header */}
       <div
         onClick={onActivate}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '8px 10px', cursor: 'pointer',
-          borderBottom: collapsed ? 'none' : '1px solid #1a1a1a',
-        }}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', cursor: 'pointer', borderBottom: collapsed ? 'none' : '1px solid #1a1a1a' }}
       >
-        {/* Collapse toggle */}
         <button
           onPointerDown={e => e.stopPropagation()}
           onClick={e => { e.stopPropagation(); setCollapsed(p => !p); }}
-          style={{
-            background: 'none', border: 'none', color: '#444', cursor: 'pointer',
-            fontSize: 9, padding: 0, flexShrink: 0, fontFamily: 'var(--font-body)',
-          }}
+          style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', fontSize: 9, padding: 0, flexShrink: 0 }}
         >
           {collapsed ? '▶' : '▼'}
         </button>
 
-        {/* Name or rename input */}
         {renaming ? (
           <input
             autoFocus
             value={newName}
             onChange={e => setNewName(e.target.value)}
-            onBlur={handleRenameSubmit}
-            onKeyDown={e => {
-              if (e.key === 'Enter') handleRenameSubmit();
-              if (e.key === 'Escape') setRenaming(false);
-            }}
+            onBlur={submitRename}
+            onKeyDown={e => { if (e.key === 'Enter') submitRename(); if (e.key === 'Escape') setRenaming(false); }}
             onClick={e => e.stopPropagation()}
-            style={{
-              flex: 1, background: '#1a1a1a', border: '1px solid #ff3d6e',
-              color: '#fff', padding: '2px 6px', fontSize: 12,
-              fontFamily: 'var(--font-body)', outline: 'none', borderRadius: 2,
-            }}
+            style={{ flex: 1, background: '#1a1a1a', border: '1px solid #ff3d6e', color: '#fff', padding: '2px 6px', fontSize: 12, fontFamily: 'var(--font-body)', outline: 'none', borderRadius: 2 }}
           />
         ) : (
-          <span style={{
-            flex: 1, fontFamily: 'var(--font-display)', fontSize: '0.9rem',
-            letterSpacing: '0.1em', color: isActive ? '#fff' : '#666',
-          }}>
+          <span style={{ flex: 1, fontFamily: 'var(--font-display)', fontSize: '0.9rem', letterSpacing: '0.1em', color: isActive ? '#fff' : '#666' }}>
             {setlist.name}
           </span>
         )}
 
-        {/* Summary when collapsed */}
         {collapsed && (
-          <span style={{ color: '#3a3a3a', fontSize: 11, fontFamily: 'var(--font-body)', flexShrink: 0 }}>
+          <span style={{ color: '#333', fontSize: 11, fontFamily: 'var(--font-body)', flexShrink: 0 }}>
             {setlist.songs.length} songs · {formatTotalDuration(totalSecs)}
           </span>
         )}
 
-        {/* Active pill */}
         {isActive && !collapsed && (
-          <span style={{ color: '#00e676', fontSize: 9, fontFamily: 'var(--font-body)', flexShrink: 0 }}>
-            ● ACTIVE
-          </span>
+          <span style={{ color: '#00e676', fontSize: 9, fontFamily: 'var(--font-body)', flexShrink: 0 }}>● ACTIVE</span>
         )}
 
-        {/* Action buttons */}
-        <div
-          style={{ display: 'flex', gap: 4, flexShrink: 0 }}
-          onPointerDown={e => e.stopPropagation()}
-          onClick={e => e.stopPropagation()}
-        >
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }} onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
           <button onClick={() => setRenaming(true)} style={btn}>✎</button>
           <button onClick={() => onExport(setlist)} style={btn}>PDF</button>
           <button onClick={() => onPrint(setlist)} style={btn}>⎙</button>
-          {showConfirmDelete ? (
+          {confirmDelete ? (
             <>
-              <button onClick={() => { onDelete(); setShowConfirmDelete(false); }} style={{ ...btn, color: '#ff3d6e', borderColor: '#ff3d6e' }}>✓</button>
-              <button onClick={() => setShowConfirmDelete(false)} style={btn}>✕</button>
+              <button onClick={() => { onDelete(); setConfirmDelete(false); }} style={{ ...btn, color: '#ff3d6e', borderColor: '#ff3d6e' }}>✓</button>
+              <button onClick={() => setConfirmDelete(false)} style={btn}>✕</button>
             </>
           ) : (
-            <button onClick={() => setShowConfirmDelete(true)} style={btn} title="Delete">🗑</button>
+            <button onClick={() => setConfirmDelete(true)} style={btn}>🗑</button>
           )}
         </div>
       </div>
 
       {/* Duration */}
       {!collapsed && (
-        <div style={{
-          padding: '4px 12px', display: 'flex', justifyContent: 'flex-end',
-          borderBottom: '1px solid #1a1a1a',
-        }}>
+        <div style={{ padding: '4px 12px', display: 'flex', justifyContent: 'flex-end', borderBottom: '1px solid #1a1a1a' }}>
           <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', letterSpacing: '0.08em', color: '#ff3d6e' }}>
             {formatTotalDuration(totalSecs)}
           </span>
         </div>
       )}
 
-      {/* Drop zone + song list */}
+      {/* Drop zone */}
       {!collapsed && (
         <div
           ref={setNodeRef}
           style={{
             minHeight: setlist.songs.length === 0 ? 72 : undefined,
             border: isOver ? '1px dashed rgba(255,61,110,0.5)' : '1px dashed transparent',
-            margin: 4,
-            borderRadius: 3,
-            transition: 'border 0.15s ease',
+            margin: 4, borderRadius: 3, transition: 'border 0.15s',
           }}
         >
           {setlist.songs.length === 0 ? (
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              height: 72, color: '#2a2a2a', fontSize: 12, fontFamily: 'var(--font-body)',
-            }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 72, color: '#2a2a2a', fontSize: 12, fontFamily: 'var(--font-body)' }}>
               {isOver ? '↓ Drop here' : 'Drag songs here · or tap + on a song'}
             </div>
           ) : (
