@@ -54,12 +54,11 @@ function SetlistSongRow({
         {index + 1}
       </span>
 
-      {/* Only this handle triggers drag */}
       <span
         ref={setActivatorNodeRef}
         {...attributes}
         {...listeners}
-        style={{ color: '#2a2a2a', cursor: 'grab', fontSize: 14, flexShrink: 0, touchAction: 'none', userSelect: 'none', padding: '0 3px' }}
+        style={{ color: '#555', cursor: 'grab', fontSize: 16, flexShrink: 0, touchAction: 'none', userSelect: 'none', padding: '0 4px' }}
       >
         ⠿
       </span>
@@ -126,6 +125,7 @@ export default function SetlistPanel({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
+  // Only active as droppable when list is empty — prevents collision detection conflict with sortable items
   const { setNodeRef, isOver } = useDroppable({
     id: `setlist-drop-${setlist.id}`,
     data: { type: 'setlist', setlistId: setlist.id },
@@ -208,7 +208,7 @@ export default function SetlistPanel({
         </div>
       )}
 
-      {/* Drop zone */}
+      {/* Song list */}
       {!collapsed && (
         <div
           ref={setNodeRef}
