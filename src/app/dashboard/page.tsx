@@ -212,70 +212,51 @@ export default function Dashboard() {
     if (data?.type === 'master') setDragSongId(data.songId);
   };
 
-  // handleDragEnd: handles both adding from master list AND reordering within a setlist
-  // No onDragOver — useSortable CSS transforms handle visual feedback during drag
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     setDragSongId(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
     const activeData = active.data.current;
+    const overData = over.data.current; // carries { type, setlistId } from useSortable
     const activeId = String(active.id);
     const overId = String(over.id);
 
-    // Case 1: adding a song from the master list
+    // Case 1: adding a song from the master catalogue
     if (activeData?.type === 'master') {
-      let resolvedId: string | null = null;
+      // Target setlist: from droppable zone id, OR from the song we dropped on, OR fall back to active
+      const targetId =
+        overId.startsWith('setlist-drop-') ? overId.replace('setlist-drop-', '') :
+        overData?.setlistId ? String(overData.setlistId) :
+        activeSetlistId;
 
-      if (overId.startsWith('setlist-drop-')) {
-        // Dropped on empty setlist droppable zone
-        resolvedId = overId.replace('setlist-drop-', '');
-      } else {
-        // Dropped on an existing song inside a non-empty setlist
-        // (droppable is disabled when list has songs, so over.id is a song instanceId)
-        for (const sl of setlists) {
-          if (sl.songs.some(s => s.instanceId === overId)) {
-            resolvedId = sl.id;
-            break;
-          }
-        }
-      }
-
-      // Fall back to active setlist if we still can't determine target
-      const finalId = resolvedId ?? activeSetlistId;
-      if (finalId) {
+      if (targetId) {
         setSetlists(prev => {
-          const sl = prev.find(s => s.id === finalId);
+          const sl = prev.find(s => s.id === targetId);
           if (!sl) return prev;
           const newItem: SetlistSong = { instanceId: uuid(), songId: activeData.songId, position: sl.songs.length };
           const updated = [...sl.songs, newItem];
-          updateSetlist(finalId, { songs: updated as unknown[] }).catch(() => {});
-          return prev.map(s => s.id === finalId ? { ...s, songs: updated } : s);
+          updateSetlist(targetId, { songs: updated as unknown[] }).catch(() => {});
+          return prev.map(s => s.id === targetId ? { ...s, songs: updated } : s);
         });
         showToast('Song added!');
       }
       return;
     }
 
-    // Case 2: reordering a song within its setlist
-    if (activeData?.type === 'setlist-song') {
-      // If dropped on the empty droppable zone rather than a song, do nothing
-      if (overId.startsWith('setlist-drop-')) return;
-
+    // Case 2: reordering within a setlist
+    // over.data.current.setlistId comes directly from useSortable — always correct, no stale closure
+    if (activeData?.type === 'setlist-song' && overData?.type === 'setlist-song') {
       const setlistId = activeData.setlistId as string;
+      if (overData.setlistId !== setlistId) return; // cross-setlist drop — ignore
+
       setSetlists(prev => {
         const sl = prev.find(s => s.id === setlistId);
         if (!sl) return prev;
-
         const oldIndex = sl.songs.findIndex(s => s.instanceId === activeId);
         const newIndex = sl.songs.findIndex(s => s.instanceId === overId);
-
-        // Both songs must exist in this setlist
         if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return prev;
-
-        const reordered = arrayMove(sl.songs, oldIndex, newIndex)
-          .map((s, i) => ({ ...s, position: i }));
-
+        const reordered = arrayMove(sl.songs, oldIndex, newIndex).map((s, i) => ({ ...s, position: i }));
         updateSetlist(setlistId, { songs: reordered as unknown[] }).catch(() => {});
         return prev.map(s => s.id === setlistId ? { ...s, songs: reordered } : s);
       });
