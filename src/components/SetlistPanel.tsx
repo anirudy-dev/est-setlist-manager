@@ -23,7 +23,6 @@ function SetlistSongRow({
     attributes,
     listeners,
     setNodeRef,
-    setActivatorNodeRef,
     transform,
     transition,
     isDragging,
@@ -38,6 +37,8 @@ function SetlistSongRow({
   return (
     <div
       ref={setNodeRef}
+      {...attributes}
+      {...listeners}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
@@ -48,18 +49,15 @@ function SetlistSongRow({
         padding: '7px 10px 7px 6px',
         borderBottom: '1px solid rgba(255,255,255,0.03)',
         background: isDragging ? '#1c1c1c' : 'transparent',
+        cursor: 'grab',
+        userSelect: 'none',
       }}
     >
-      <span style={{ color: '#2a2a2a', fontSize: 10, width: 18, textAlign: 'right', flexShrink: 0, userSelect: 'none' }}>
+      <span style={{ color: '#2a2a2a', fontSize: 10, width: 18, textAlign: 'right', flexShrink: 0 }}>
         {index + 1}
       </span>
 
-      <span
-        ref={setActivatorNodeRef}
-        {...attributes}
-        {...listeners}
-        style={{ color: '#555', cursor: 'grab', fontSize: 16, flexShrink: 0, touchAction: 'none', userSelect: 'none', padding: '0 4px' }}
-      >
+      <span style={{ color: '#444', fontSize: 16, flexShrink: 0, padding: '0 4px' }}>
         ⠿
       </span>
 
@@ -125,7 +123,6 @@ export default function SetlistPanel({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
-  // Only active as droppable when list is empty — prevents collision detection conflict with sortable items
   const { setNodeRef, isOver } = useDroppable({
     id: `setlist-drop-${setlist.id}`,
     data: { type: 'setlist', setlistId: setlist.id },
@@ -144,8 +141,6 @@ export default function SetlistPanel({
 
   return (
     <div style={{ background: isActive ? '#131313' : '#0b0b0b', border: isActive ? '1px solid #2a2a2a' : '1px solid #161616', borderRadius: 4, marginBottom: 10 }}>
-
-      {/* Header */}
       <div
         onClick={onActivate}
         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', cursor: 'pointer', borderBottom: collapsed ? 'none' : '1px solid #1a1a1a' }}
@@ -199,7 +194,6 @@ export default function SetlistPanel({
         </div>
       </div>
 
-      {/* Duration */}
       {!collapsed && (
         <div style={{ padding: '4px 12px', display: 'flex', justifyContent: 'flex-end', borderBottom: '1px solid #1a1a1a' }}>
           <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', letterSpacing: '0.08em', color: '#ff3d6e' }}>
@@ -208,7 +202,6 @@ export default function SetlistPanel({
         </div>
       )}
 
-      {/* Song list */}
       {!collapsed && (
         <div
           ref={setNodeRef}
