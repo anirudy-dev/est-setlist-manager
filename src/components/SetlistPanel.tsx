@@ -129,6 +129,7 @@ export default function SetlistPanel({
   const { setNodeRef, isOver } = useDroppable({
     id: `setlist-drop-${setlist.id}`,
     data: { type: 'setlist', setlistId: setlist.id },
+    disabled: setlist.songs.length > 0,
   });
 
   const totalSecs = setlist.songs.reduce((acc, item) => {
