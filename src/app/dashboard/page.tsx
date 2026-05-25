@@ -174,13 +174,6 @@ export default function Dashboard() {
   };
 
   // ── Song helpers ───────────────────────────────────────────────────────────
-  const saveSetlistSongs = useCallback(async (setlistId: string, songs: SetlistSong[]) => {
-    setSetlists(prev => prev.map(s => s.id === setlistId ? { ...s, songs } : s));
-    try {
-      await updateSetlist(setlistId, { songs: songs as unknown[] });
-    } catch { showToast('Error saving'); }
-  }, [showToast]);
-
   const addSongToActive = useCallback((songId: string) => {
     if (!activeSetlistId) return;
     setSetlists(prev => {
@@ -188,7 +181,6 @@ export default function Dashboard() {
       if (!sl) return prev;
       const newItem: SetlistSong = { instanceId: uuid(), songId, position: sl.songs.length };
       const updated = [...sl.songs, newItem];
-      // fire-and-forget save
       updateSetlist(activeSetlistId, { songs: updated as unknown[] }).catch(() => {});
       return prev.map(s => s.id === activeSetlistId ? { ...s, songs: updated } : s);
     });
@@ -199,13 +191,29 @@ export default function Dashboard() {
     setSetlists(prev => {
       const sl = prev.find(s => s.id === setlistId);
       if (!sl) return prev;
-      const updated = sl.songs.filter(s => s.instanceId !== instanceId).map((s, i) => ({ ...s, position: i }));
+      const updated = sl.songs
+        .filter(s => s.instanceId !== instanceId)
+        .map((s, i) => ({ ...s, position: i }));
       updateSetlist(setlistId, { songs: updated as unknown[] }).catch(() => {});
       return prev.map(s => s.id === setlistId ? { ...s, songs: updated } : s);
     });
   }, []);
 
-  // ── DnD ────────────────────────────────────────────────────────────────────
+  // Native HTML5 drag reorder — replaces dnd-kit sortable for within-setlist reordering
+  const handleReorder = useCallback((setlistId: string, fromIndex: number, toIndex: number) => {
+    setSetlists(prev => {
+      const sl = prev.find(s => s.id === setlistId);
+      if (!sl) return prev;
+      const songs = [...sl.songs];
+      const [moved] = songs.splice(fromIndex, 1);
+      songs.splice(toIndex, 0, moved);
+      const reordered = songs.map((s, i) => ({ ...s, position: i }));
+      updateSetlist(setlistId, { songs: reordered as unknown[] }).catch(() => {});
+      return prev.map(s => s.id === setlistId ? { ...s, songs: reordered } : s);
+    });
+  }, []);
+
+  // ── DnD (master list → setlist only) ─────────────────────────────────────
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
@@ -219,16 +227,14 @@ export default function Dashboard() {
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     setDragSongId(null);
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    if (!over) return;
 
     const activeData = active.data.current;
-    const overData = over.data.current; // carries { type, setlistId } from useSortable
-    const activeId = String(active.id);
+    const overData = over.data.current;
     const overId = String(over.id);
 
-    // Case 1: adding a song from the master catalogue
+    // Only handles master song drops — within-setlist reorder uses native HTML5 DnD
     if (activeData?.type === 'master') {
-      // Target setlist: from droppable zone id, OR from the song we dropped on, OR fall back to active
       const targetId =
         overId.startsWith('setlist-drop-') ? overId.replace('setlist-drop-', '') :
         overData?.setlistId ? String(overData.setlistId) :
@@ -245,25 +251,6 @@ export default function Dashboard() {
         });
         showToast('Song added!');
       }
-      return;
-    }
-
-    // Case 2: reordering within a setlist
-    // over.data.current.setlistId comes directly from useSortable — always correct, no stale closure
-    if (activeData?.type === 'setlist-song' && overData?.type === 'setlist-song') {
-      const setlistId = activeData.setlistId as string;
-      if (overData.setlistId !== setlistId) return; // cross-setlist drop — ignore
-
-      setSetlists(prev => {
-        const sl = prev.find(s => s.id === setlistId);
-        if (!sl) return prev;
-        const oldIndex = sl.songs.findIndex(s => s.instanceId === activeId);
-        const newIndex = sl.songs.findIndex(s => s.instanceId === overId);
-        if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return prev;
-        const reordered = arrayMove(sl.songs, oldIndex, newIndex).map((s, i) => ({ ...s, position: i }));
-        updateSetlist(setlistId, { songs: reordered as unknown[] }).catch(() => {});
-        return prev.map(s => s.id === setlistId ? { ...s, songs: reordered } : s);
-      });
     }
   }, [activeSetlistId, showToast]);
 
@@ -337,6 +324,7 @@ export default function Dashboard() {
                   onRename={name => handleRenameSetlist(sl.id, name)}
                   onDelete={() => handleDeleteSetlist(sl.id)}
                   onRemoveSong={instanceId => handleRemoveSong(sl.id, instanceId)}
+                  onReorder={handleReorder}
                   onExport={handleExportSet}
                   onPrint={handlePrint}
                   gigName={selectedGig?.name ?? ''}
