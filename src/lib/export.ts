@@ -96,7 +96,7 @@ export async function exportSetlistPDF(setlist: Setlist, gig: Gig, allSongs: Son
     headStyles: { fillColor: [20, 20, 20], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
     alternateRowStyles: { fillColor: [248, 248, 248] },
     columnStyles: {
-      0: { cellWidth: 8, halign: 'center' },
+      0: { cellWidth: 14, halign: 'center' },
       1: { cellWidth: 60, fontStyle: 'bold' },
       2: { cellWidth: 50 },
       3: { cellWidth: 18, halign: 'center', textColor: [120, 120, 120] },
@@ -166,7 +166,7 @@ export async function exportGigPDF(gig: Gig, setlists: Setlist[], allSongs: Song
       headStyles: { fillColor: [40, 40, 40], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.5 },
       alternateRowStyles: { fillColor: [248, 248, 248] },
       columnStyles: {
-        0: { cellWidth: 8, halign: 'center' },
+        0: { cellWidth: 14, halign: 'center' },
         1: { cellWidth: 68, fontStyle: 'bold' },
         2: { cellWidth: 52 },
         3: { cellWidth: 20, halign: 'center', textColor: [130, 130, 130] },
