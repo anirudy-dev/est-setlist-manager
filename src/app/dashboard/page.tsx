@@ -6,6 +6,7 @@ import Image from 'next/image';
 import {
   DndContext,
   DragEndEvent,
+  DragOverEvent,
   DragOverlay,
   DragStartEvent,
   PointerSensor,
@@ -212,8 +213,29 @@ export default function Dashboard() {
     const data = event.active.data.current;
     if (data?.type === 'master') setDragSongId(data.songId);
   };
+const handleDragOver = useCallback((event: DragOverEvent) => {
+  const { active, over } = event;
+  if (!over) return;
+  const activeData = active.data.current;
+  if (activeData?.type !== 'setlist-song') return;
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const activeId = String(active.id);
+  const overId = String(over.id);
+  if (activeId === overId) return;
+  if (overId.startsWith('setlist-drop-')) return; // ignore droppable zone
+
+  const setlistId = activeData.setlistId as string;
+  setSetlists(prev => {
+    const sl = prev.find(s => s.id === setlistId);
+    if (!sl) return prev;
+    const activeIdx = sl.songs.findIndex(s => s.instanceId === activeId);
+    const overIdx = sl.songs.findIndex(s => s.instanceId === overId);
+    if (activeIdx === -1 || overIdx === -1 || activeIdx === overIdx) return prev;
+    const reordered = arrayMove(sl.songs, activeIdx, overIdx).map((s, i) => ({ ...s, position: i }));
+    return prev.map(s => s.id === setlistId ? { ...s, songs: reordered } : s);
+  });
+}, []);
+  const handleDragEnd = async (event: DragEndEvent) => {
     setDragSongId(null);
     const { active, over } = event;
     if (!over) return;
@@ -240,19 +262,14 @@ export default function Dashboard() {
     // ── Case 2: reordering within a setlist ───────────────────────────────
     // activeData.type === 'setlist-song', activeData.setlistId tells us which list
     if (activeData?.type === 'setlist-song') {
-      const setlistId = activeData.setlistId as string;
-      const sl = setlists.find(s => s.id === setlistId);
-      if (!sl) return;
-
-      const activeIdx = sl.songs.findIndex(s => s.instanceId === String(active.id));
-      const overIdx = sl.songs.findIndex(s => s.instanceId === overId);
-
-      if (activeIdx !== -1 && overIdx !== -1 && activeIdx !== overIdx) {
-        const reordered = arrayMove(sl.songs, activeIdx, overIdx).map((s, i) => ({ ...s, position: i }));
-        updateSetlistSongs(sl.id, reordered);
-      }
-    }
-  };
+  const setlistId = activeData.setlistId as string;
+  const sl = setlists.find(s => s.id === setlistId);
+  if (sl) {
+    try {
+      await updateSetlist(setlistId, { songs: sl.songs as unknown[] });
+    } catch { showToast('Error saving order'); }
+  }
+}
 
   // ── Export / Print ─────────────────────────────────────────────────────────
   const handleExportSet = (sl: Setlist) => {
@@ -407,7 +424,7 @@ export default function Dashboard() {
       {!selectedGigId ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center', gap: 16 }}>
           <Image
-            src="/est_logo_cropped.png"
+            src="/logo.png"
             alt="EST"
             width={180}
             height={45}
@@ -522,11 +539,12 @@ export default function Dashboard() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
+  sensors={sensors}
+  collisionDetection={closestCenter}
+  onDragStart={handleDragStart}
+  onDragOver={handleDragOver}
+  onDragEnd={handleDragEnd}
+>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#0a0a0a', color: '#fff' }}>
 
         {/* Nav */}
