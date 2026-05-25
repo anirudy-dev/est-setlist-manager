@@ -6,7 +6,6 @@ import Image from 'next/image';
 import {
   DndContext,
   DragEndEvent,
-  DragOverEvent,
   DragOverlay,
   DragStartEvent,
   PointerSensor,
@@ -213,51 +212,18 @@ export default function Dashboard() {
     if (data?.type === 'master') setDragSongId(data.songId);
   };
 
-  // onDragOver: live visual reordering of songs within a setlist
-  // This is the ONLY place arrayMove runs — onDragEnd just saves the result
-  const handleDragOver = useCallback((event: DragOverEvent) => {
+  // handleDragEnd: handles both adding from master list AND reordering within a setlist
+  // No onDragOver — useSortable CSS transforms handle visual feedback during drag
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    setDragSongId(null);
     const { active, over } = event;
-    if (!over) return;
+    if (!over || active.id === over.id) return;
 
     const activeData = active.data.current;
-    // Only handle setlist-song type — ignore master list drags
-    if (activeData?.type !== 'setlist-song') return;
-
     const activeId = String(active.id);
     const overId = String(over.id);
 
-    // Don't do anything if hovering over the empty droppable zone or itself
-    if (activeId === overId) return;
-    if (overId.startsWith('setlist-drop-')) return;
-
-    const setlistId = activeData.setlistId as string;
-
-    setSetlists(prev => {
-      const sl = prev.find(s => s.id === setlistId);
-      if (!sl) return prev;
-
-      const oldIndex = sl.songs.findIndex(s => s.instanceId === activeId);
-      const newIndex = sl.songs.findIndex(s => s.instanceId === overId);
-
-      // Guard: both must exist and be different
-      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return prev;
-
-      const reordered = arrayMove(sl.songs, oldIndex, newIndex).map((s, i) => ({ ...s, position: i }));
-      return prev.map(s => s.id === setlistId ? { ...s, songs: reordered } : s);
-    });
-  }, []);
-
-  // onDragEnd: persist master-song adds to DB; persist reorder to DB
-  // Does NOT call arrayMove — that already happened in onDragOver
-  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
-    setDragSongId(null);
-    const { active, over } = event;
-    if (!over) return;
-
-    const activeData = active.data.current;
-    const overId = String(over.id);
-
-    // Case 1: adding from master song list
+    // Case 1: adding a song from the master list
     if (activeData?.type === 'master') {
       const targetSetlistId = overId.startsWith('setlist-drop-')
         ? overId.replace('setlist-drop-', '')
@@ -277,15 +243,27 @@ export default function Dashboard() {
       return;
     }
 
-    // Case 2: reorder finished — just save current state to DB
+    // Case 2: reordering a song within its setlist
     if (activeData?.type === 'setlist-song') {
+      // If dropped on the empty droppable zone rather than a song, do nothing
+      if (overId.startsWith('setlist-drop-')) return;
+
       const setlistId = activeData.setlistId as string;
       setSetlists(prev => {
         const sl = prev.find(s => s.id === setlistId);
-        if (sl) {
-          updateSetlist(setlistId, { songs: sl.songs as unknown[] }).catch(() => {});
-        }
-        return prev;
+        if (!sl) return prev;
+
+        const oldIndex = sl.songs.findIndex(s => s.instanceId === activeId);
+        const newIndex = sl.songs.findIndex(s => s.instanceId === overId);
+
+        // Both songs must exist in this setlist
+        if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return prev;
+
+        const reordered = arrayMove(sl.songs, oldIndex, newIndex)
+          .map((s, i) => ({ ...s, position: i }));
+
+        updateSetlist(setlistId, { songs: reordered as unknown[] }).catch(() => {});
+        return prev.map(s => s.id === setlistId ? { ...s, songs: reordered } : s);
       });
     }
   }, [activeSetlistId, showToast]);
@@ -402,7 +380,7 @@ export default function Dashboard() {
     <div style={{ padding: '16px 14px', overflowY: 'auto', height: '100%' }}>
       {!selectedGigId ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center', gap: 16 }}>
-          <Image src="/logo.png" alt="EST" width={180} height={45} style={{ width: 140, height: 'auto', mixBlendMode: 'lighten', opacity: 0.08 }} />
+          <Image src="/est_logo_cropped.png" alt="EST" width={180} height={45} style={{ width: 140, height: 'auto', mixBlendMode: 'lighten', opacity: 0.08 }} />
           <div style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', letterSpacing: '0.15em', color: '#1e1e1e' }}>SELECT A GIG TO SEE YOUR CHEAT SHEET</div>
         </div>
       ) : (
@@ -477,7 +455,6 @@ export default function Dashboard() {
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#0a0a0a', color: '#fff' }}>
