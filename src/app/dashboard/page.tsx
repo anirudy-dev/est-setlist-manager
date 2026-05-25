@@ -225,18 +225,32 @@ export default function Dashboard() {
 
     // Case 1: adding a song from the master list
     if (activeData?.type === 'master') {
-      const targetSetlistId = overId.startsWith('setlist-drop-')
-        ? overId.replace('setlist-drop-', '')
-        : null;
-      const resolvedId = targetSetlistId ?? activeSetlistId;
-      if (resolvedId) {
+      let resolvedId: string | null = null;
+
+      if (overId.startsWith('setlist-drop-')) {
+        // Dropped on empty setlist droppable zone
+        resolvedId = overId.replace('setlist-drop-', '');
+      } else {
+        // Dropped on an existing song inside a non-empty setlist
+        // (droppable is disabled when list has songs, so over.id is a song instanceId)
+        for (const sl of setlists) {
+          if (sl.songs.some(s => s.instanceId === overId)) {
+            resolvedId = sl.id;
+            break;
+          }
+        }
+      }
+
+      // Fall back to active setlist if we still can't determine target
+      const finalId = resolvedId ?? activeSetlistId;
+      if (finalId) {
         setSetlists(prev => {
-          const sl = prev.find(s => s.id === resolvedId);
+          const sl = prev.find(s => s.id === finalId);
           if (!sl) return prev;
           const newItem: SetlistSong = { instanceId: uuid(), songId: activeData.songId, position: sl.songs.length };
           const updated = [...sl.songs, newItem];
-          updateSetlist(resolvedId, { songs: updated as unknown[] }).catch(() => {});
-          return prev.map(s => s.id === resolvedId ? { ...s, songs: updated } : s);
+          updateSetlist(finalId, { songs: updated as unknown[] }).catch(() => {});
+          return prev.map(s => s.id === finalId ? { ...s, songs: updated } : s);
         });
         showToast('Song added!');
       }
