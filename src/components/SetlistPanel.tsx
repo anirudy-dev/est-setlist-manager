@@ -1,56 +1,62 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { Setlist, SetlistSong, Song } from '@/types';
 import { formatDuration, formatTotalDuration } from '@/data/songs';
 
 function SetlistSongRow({
   item,
   index,
-  setlistId,
   onRemove,
+  onDragStart,
+  onDragOver,
+  onDrop,
   allSongs,
 }: {
   item: SetlistSong;
   index: number;
-  setlistId: string;
   onRemove: () => void;
+  onDragStart: (index: number) => void;
+  onDragOver: (index: number) => void;
+  onDrop: (toIndex: number) => void;
   allSongs: Song[];
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: item.instanceId,
-    data: { type: 'setlist-song', setlistId },
-  });
-
+  const [isOver, setIsOver] = useState(false);
   const song = allSongs.find(s => s.id === item.songId);
   if (!song) return null;
 
   return (
     <div
-      ref={setNodeRef}
-      {...attributes}
-      {...listeners}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(index));
+        onDragStart(index);
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setIsOver(true);
+        onDragOver(index);
+      }}
+      onDragLeave={() => setIsOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setIsOver(false);
+        onDrop(index);
+      }}
+      onDragEnd={() => setIsOver(false)}
       style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.3 : 1,
         display: 'flex',
         alignItems: 'center',
         gap: 8,
         padding: '7px 10px 7px 6px',
         borderBottom: '1px solid rgba(255,255,255,0.03)',
-        background: isDragging ? '#1c1c1c' : 'transparent',
+        borderTop: isOver ? '2px solid #ff3d6e' : '2px solid transparent',
         cursor: 'grab',
         userSelect: 'none',
+        background: 'transparent',
+        transition: 'border-top 0.1s',
       }}
     >
       <span style={{ color: '#2a2a2a', fontSize: 10, width: 18, textAlign: 'right', flexShrink: 0 }}>
@@ -80,7 +86,7 @@ function SetlistSongRow({
       </div>
 
       <button
-        onPointerDown={e => e.stopPropagation()}
+        onMouseDown={e => e.stopPropagation()}
         onClick={onRemove}
         style={{ background: 'none', border: 'none', color: '#2a2a2a', cursor: 'pointer', fontSize: 18, flexShrink: 0, padding: '0 2px', lineHeight: 1, transition: 'color 0.15s' }}
         onMouseEnter={e => (e.currentTarget.style.color = '#ff3d6e')}
@@ -99,6 +105,7 @@ interface SetlistPanelProps {
   onRename: (name: string) => void;
   onDelete: () => void;
   onRemoveSong: (instanceId: string) => void;
+  onReorder: (setlistId: string, fromIndex: number, toIndex: number) => void;
   onExport: (setlist: Setlist) => void;
   onPrint: (setlist: Setlist) => void;
   gigName: string;
@@ -114,6 +121,7 @@ export default function SetlistPanel({
   onRename,
   onDelete,
   onRemoveSong,
+  onReorder,
   onExport,
   onPrint,
   allSongs,
@@ -122,8 +130,10 @@ export default function SetlistPanel({
   const [newName, setNewName] = useState(setlist.name);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const dragFromIndex = useRef<number>(-1);
 
-  const { setNodeRef, isOver } = useDroppable({
+  // Used only when setlist is empty — lets master songs drop in
+  const { setNodeRef, isOver: isDropOver } = useDroppable({
     id: `setlist-drop-${setlist.id}`,
     data: { type: 'setlist', setlistId: setlist.id },
     disabled: setlist.songs.length > 0,
@@ -139,14 +149,27 @@ export default function SetlistPanel({
     setRenaming(false);
   };
 
+  const handleDragStart = (index: number) => {
+    dragFromIndex.current = index;
+  };
+
+  const handleDrop = (toIndex: number) => {
+    const from = dragFromIndex.current;
+    if (from === -1 || from === toIndex) return;
+    onReorder(setlist.id, from, toIndex);
+    dragFromIndex.current = -1;
+  };
+
   return (
     <div style={{ background: isActive ? '#131313' : '#0b0b0b', border: isActive ? '1px solid #2a2a2a' : '1px solid #161616', borderRadius: 4, marginBottom: 10 }}>
+
+      {/* Header */}
       <div
         onClick={onActivate}
         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px', cursor: 'pointer', borderBottom: collapsed ? 'none' : '1px solid #1a1a1a' }}
       >
         <button
-          onPointerDown={e => e.stopPropagation()}
+          onMouseDown={e => e.stopPropagation()}
           onClick={e => { e.stopPropagation(); setCollapsed(p => !p); }}
           style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', fontSize: 9, padding: 0, flexShrink: 0 }}
         >
@@ -179,7 +202,7 @@ export default function SetlistPanel({
           <span style={{ color: '#00e676', fontSize: 9, fontFamily: 'var(--font-body)', flexShrink: 0 }}>● ACTIVE</span>
         )}
 
-        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }} onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }} onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
           <button onClick={() => setRenaming(true)} style={btn}>✎</button>
           <button onClick={() => onExport(setlist)} style={btn}>PDF</button>
           <button onClick={() => onPrint(setlist)} style={btn}>⎙</button>
@@ -194,6 +217,7 @@ export default function SetlistPanel({
         </div>
       </div>
 
+      {/* Duration */}
       {!collapsed && (
         <div style={{ padding: '4px 12px', display: 'flex', justifyContent: 'flex-end', borderBottom: '1px solid #1a1a1a' }}>
           <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', letterSpacing: '0.08em', color: '#ff3d6e' }}>
@@ -202,32 +226,33 @@ export default function SetlistPanel({
         </div>
       )}
 
+      {/* Song list */}
       {!collapsed && (
         <div
           ref={setNodeRef}
           style={{
             minHeight: setlist.songs.length === 0 ? 72 : undefined,
-            border: isOver ? '1px dashed rgba(255,61,110,0.5)' : '1px dashed transparent',
+            border: isDropOver ? '1px dashed rgba(255,61,110,0.5)' : '1px dashed transparent',
             margin: 4, borderRadius: 3, transition: 'border 0.15s',
           }}
         >
           {setlist.songs.length === 0 ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 72, color: '#2a2a2a', fontSize: 12, fontFamily: 'var(--font-body)' }}>
-              {isOver ? '↓ Drop here' : 'Drag songs here · or tap + on a song'}
+              {isDropOver ? '↓ Drop here' : 'Drag songs here · or tap + on a song'}
             </div>
           ) : (
-            <SortableContext items={setlist.songs.map(s => s.instanceId)} strategy={verticalListSortingStrategy}>
-              {setlist.songs.map((item, index) => (
-                <SetlistSongRow
-                  key={item.instanceId}
-                  item={item}
-                  index={index}
-                  setlistId={setlist.id}
-                  onRemove={() => onRemoveSong(item.instanceId)}
-                  allSongs={allSongs}
-                />
-              ))}
-            </SortableContext>
+            setlist.songs.map((item, index) => (
+              <SetlistSongRow
+                key={item.instanceId}
+                item={item}
+                index={index}
+                onRemove={() => onRemoveSong(item.instanceId)}
+                onDragStart={handleDragStart}
+                onDragOver={() => {}}
+                onDrop={handleDrop}
+                allSongs={allSongs}
+              />
+            ))
           )}
         </div>
       )}
