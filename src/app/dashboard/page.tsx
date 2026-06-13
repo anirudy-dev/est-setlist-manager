@@ -51,6 +51,7 @@ export default function Dashboard() {
   const allSongs: Song[] = useMemo(() => [...SONGS, ...customSongs], [customSongs]);
   const selectedGig = gigs.find(g => g.id === selectedGigId) ?? null;
   const gigSetlists = setlists.filter(s => s.gig_id === selectedGigId);
+  const gigHasSongs = gigSetlists.some(sl => (sl.songs?.length ?? 0) > 0);
 
   // ── Auth ───────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -276,6 +277,15 @@ export default function Dashboard() {
     printSetlist(sl, selectedGig, allSongs);
   }, [selectedGig, allSongs]);
 
+  // Open stage mode for the currently selected gig in a new tab so the
+  // editor stays open behind it.
+  const handleOpenStage = useCallback(() => {
+    if (!selectedGigId) return;
+    if (typeof window !== 'undefined') {
+      window.open(`/stage/${selectedGigId}`, '_blank', 'noopener,noreferrer');
+    }
+  }, [selectedGigId]);
+
   const handleLogout = () => { localStorage.removeItem('est-auth'); router.push('/'); };
 
   const draggingSong = dragSongId ? allSongs.find(s => s.id === dragSongId) : null;
@@ -298,6 +308,25 @@ export default function Dashboard() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <span style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', letterSpacing: '0.1em', color: '#fff' }}>SETLISTS</span>
             <div style={{ display: 'flex', gap: 6 }}>
+              {gigHasSongs && (
+                <button
+                  onClick={handleOpenStage}
+                  title="Open stage mode in a new tab"
+                  style={{
+                    fontFamily: 'var(--font-body)',
+                    fontSize: 10,
+                    background: '#1a1a1a',
+                    color: '#ff3d6e',
+                    border: '1px solid #ff3d6e',
+                    cursor: 'pointer',
+                    padding: '4px 10px',
+                    letterSpacing: '0.1em',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  ▶ STAGE
+                </button>
+              )}
               {gigSetlists.length > 0 && (
                 <button onClick={handleExportGig} style={{ fontFamily: 'var(--font-body)', fontSize: 10, background: '#1a1a1a', color: '#aaa', border: '1px solid #2a2a2a', cursor: 'pointer', padding: '4px 10px', letterSpacing: '0.08em' }}>
                   GIG PDF
