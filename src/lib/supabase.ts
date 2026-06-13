@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { Song } from '@/types';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -105,13 +106,37 @@ export async function deleteSetlist(id: string) {
 
 // ── Custom Songs ──────────────────────────────────────────────────────────────
 
-export async function getCustomSongs() {
+/**
+ * Returns custom songs from Supabase, normalized to the same `Song` shape
+ * used by the hardcoded library so MasterSongList can merge both arrays
+ * with no special-casing.
+ */
+export async function getCustomSongs(): Promise<Song[]> {
   const { data, error } = await supabase
     .from('custom_songs')
     .select('*')
     .order('created_at', { ascending: true });
   if (error) throw error;
-  return data;
+  return (data ?? []).map((row: {
+    id: string;
+    title: string;
+    artist: string;
+    decade: string;
+    year: number;
+    duration: number;
+    mood: string;
+    mood_color: string;
+  }): Song => ({
+    id: row.id,
+    title: row.title,
+    artist: row.artist,
+    decade: row.decade,
+    year: row.year,
+    duration: row.duration,
+    mood: row.mood,
+    moodColor: row.mood_color,
+    energy: 'high',
+  }));
 }
 
 // Converts "M:SS" or "MM:SS" string to total seconds
