@@ -13,6 +13,7 @@
 - Export setlists as PDF
 - Print-formatted setlists
 - All data shared in real-time between bandmates
+- **Stage mode** — phone-first dark view of a gig's setlists, with swipe to advance, screen wake lock, and set-transition cues. Open via the `▶ STAGE` button on a gig, or directly at `/stage/<gigId>`.
 
 ---
 
@@ -130,6 +131,9 @@ src/
 │   ├── page.tsx          ← Login page
 │   ├── dashboard/
 │   │   └── page.tsx      ← Main app
+│   ├── stage/
+│   │   └── [gigId]/
+│   │       └── page.tsx  ← Phone-first stage mode
 │   └── globals.css
 ├── components/
 │   ├── MasterSongList    ← Left column: song catalogue
