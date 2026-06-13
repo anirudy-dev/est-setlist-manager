@@ -33,16 +33,14 @@ type StagePosition = {
   song: Song;
 };
 
-// Lightweight nav typing for wake lock — the global lib.dom type isn't
-// guaranteed across all Next/TS configurations.
-interface WakeLockSentinelLike {
+// Local, opaque type for the screen wake lock. We avoid `extends Navigator`
+// because lib.dom typings collide when widening the wakeLock property.
+type WakeLockSentinelLike = {
   release: () => Promise<void>;
-}
-interface WakeLockNavigator extends Navigator {
-  wakeLock?: {
-    request: (type: 'screen') => Promise<WakeLockSentinelLike>;
-  };
-}
+};
+type WakeLockApi = {
+  request: (type: 'screen') => Promise<WakeLockSentinelLike>;
+};
 
 const COLORS = {
   bg: '#0A0A0B',
@@ -206,7 +204,7 @@ export default function StagePage() {
   // Wake lock — keep the screen awake while on stage. Re-acquire on
   // visibility change (locking and unlocking the phone releases it).
   useEffect(() => {
-    const nav = navigator as WakeLockNavigator;
+    const nav = navigator as unknown as { wakeLock?: WakeLockApi };
     if (!nav.wakeLock) return;
 
     let lock: WakeLockSentinelLike | null = null;
