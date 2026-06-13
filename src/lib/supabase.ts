@@ -114,6 +114,16 @@ export async function getCustomSongs() {
   return data;
 }
 
+// Converts "M:SS" or "MM:SS" string to total seconds
+function parseDuration(duration: string): number {
+  const parts = duration.split(':');
+  if (parts.length !== 2) return 0;
+  const minutes = parseInt(parts[0], 10);
+  const seconds = parseInt(parts[1], 10);
+  if (isNaN(minutes) || isNaN(seconds)) return 0;
+  return minutes * 60 + seconds;
+}
+
 export async function addCustomSong(song: {
   title: string;
   artist: string;
@@ -125,7 +135,15 @@ export async function addCustomSong(song: {
 }) {
   const { data, error } = await supabase
     .from('custom_songs')
-    .insert([song])
+    .insert([{
+      title: song.title,
+      artist: song.artist,
+      decade: song.decade,
+      year: song.year,
+      duration: parseDuration(song.duration), // ← converts "4:32" to 272
+      mood: song.mood,
+      mood_color: song.mood_color,
+    }])
     .select()
     .single();
   if (error) throw error;
