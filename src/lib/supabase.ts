@@ -202,3 +202,59 @@ export async function replaceSetlistsForGig(
   if (error) throw error;
   return data;
 }
+
+
+// ── Debrief ─────────────────────────────────────────────────────────────────
+
+interface DebriefPayload {
+  gig_id: string;
+  overall_score: number | null;
+  rebook_signal: boolean | null;
+  notes: string;
+  song_outcomes: Array<{
+    song_id: string;
+    set_position: number;
+    song_position: number;
+    floor_density: number;
+    singalong_heat: number;
+    bar_pull: number;
+  }>;
+}
+
+/**
+ * Save a post-gig debrief: inserts one gig_outcomes row and N song_outcomes
+ * rows. The gig_outcomes row is the parent for cascade delete safety.
+ */
+export async function saveGigDebrief(payload: DebriefPayload) {
+  const { data: outcome, error: outErr } = await supabase
+    .from('gig_outcomes')
+    .insert([{
+      gig_id: payload.gig_id,
+      overall_score: payload.overall_score,
+      rebook_signal: payload.rebook_signal,
+      notes: payload.notes || null,
+    }])
+    .select()
+    .single();
+  if (outErr) throw outErr;
+  if (!outcome) throw new Error('Failed to create gig_outcomes row');
+
+  const songRows = payload.song_outcomes.map((s) => ({
+    gig_outcome_id: outcome.id,
+    song_id: s.song_id,
+    set_position: s.set_position,
+    song_position: s.song_position,
+    floor_density: s.floor_density,
+    singalong_heat: s.singalong_heat,
+    bar_pull: s.bar_pull,
+  }));
+
+  if (songRows.length > 0) {
+    const { error: songErr } = await supabase
+      .from('song_outcomes')
+      .insert(songRows);
+    if (songErr) throw songErr;
+  }
+
+  return outcome;
+}
