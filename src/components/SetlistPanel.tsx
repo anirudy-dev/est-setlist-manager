@@ -1,8 +1,10 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, type CSSProperties } from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { Setlist, SetlistSong, Song } from '@/types';
+import { Setlist, SetlistSong, Song, MiniSet, BanterSlot } from '@/types';
+import { banterPositionLabel } from '@/types';
 import { formatDuration, formatTotalDuration } from '@/data/songs';
+import SongRowPopover from './SongRowPopover';
 
 function SetlistSongRow({
   item,
@@ -11,7 +13,9 @@ function SetlistSongRow({
   onDragStart,
   onDragOver,
   onDrop,
+  onOpenSettings,
   allSongs,
+  previousMiniSet,
 }: {
   item: SetlistSong;
   index: number;
@@ -19,82 +23,128 @@ function SetlistSongRow({
   onDragStart: (index: number) => void;
   onDragOver: (index: number) => void;
   onDrop: (toIndex: number) => void;
+  onOpenSettings: (anchor: DOMRect) => void;
   allSongs: Song[];
+  previousMiniSet: MiniSet | null | undefined;
 }) {
   const [isOver, setIsOver] = useState(false);
   const song = allSongs.find(s => s.id === item.songId);
   if (!song) return null;
 
+  // Render a small divider when this row starts a new mini-set
+  const miniSet = item.mini_set ?? null;
+  const startsNewMini = miniSet && miniSet !== (previousMiniSet ?? null);
+
+  const handleSettingsClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    onOpenSettings(rect);
+  };
+
   return (
-    <div
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', String(index));
-        onDragStart(index);
-      }}
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        setIsOver(true);
-        onDragOver(index);
-      }}
-      onDragLeave={() => setIsOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setIsOver(false);
-        onDrop(index);
-      }}
-      onDragEnd={() => setIsOver(false)}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '7px 10px 7px 6px',
-        borderBottom: '1px solid rgba(255,255,255,0.03)',
-        borderTop: isOver ? '2px solid #ff3d6e' : '2px solid transparent',
-        cursor: 'grab',
-        userSelect: 'none',
-        background: 'transparent',
-        transition: 'border-top 0.1s',
-      }}
-    >
-      <span style={{ color: '#2a2a2a', fontSize: 10, width: 18, textAlign: 'right', flexShrink: 0 }}>
-        {index + 1}
-      </span>
-
-      <span style={{ color: '#444', fontSize: 16, flexShrink: 0, padding: '0 4px' }}>
-        ⠿
-      </span>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ color: '#fff', fontSize: 13, fontWeight: 'bold', fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {song.title}
+    <>
+      {startsNewMini && (
+        <div style={{
+          padding: '6px 12px 4px',
+          fontFamily: 'var(--font-display)',
+          fontSize: '0.7rem',
+          letterSpacing: '0.18em',
+          color: '#4ECDC4',
+          borderTop: '1px solid #1a1a1a',
+        }}>
+          ── Mini-set {miniSet} ──
         </div>
-        <div style={{ color: '#555', fontSize: 11, fontFamily: 'var(--font-body)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {song.artist}
-        </div>
-      </div>
+      )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
-        <span style={{ background: song.moodColor + '22', color: song.moodColor, border: `1px solid ${song.moodColor}44`, fontSize: 9, padding: '1px 5px', borderRadius: 2, fontFamily: 'var(--font-body)' }}>
-          {song.mood}
-        </span>
-        <span style={{ color: '#555', fontSize: 11, fontFamily: 'var(--font-body)' }}>
-          {formatDuration(song.duration)}
-        </span>
-      </div>
-
-      <button
-        onMouseDown={e => e.stopPropagation()}
-        onClick={onRemove}
-        style={{ background: 'none', border: 'none', color: '#2a2a2a', cursor: 'pointer', fontSize: 18, flexShrink: 0, padding: '0 2px', lineHeight: 1, transition: 'color 0.15s' }}
-        onMouseEnter={e => (e.currentTarget.style.color = '#ff3d6e')}
-        onMouseLeave={e => (e.currentTarget.style.color = '#2a2a2a')}
+      <div
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', String(index));
+          onDragStart(index);
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          setIsOver(true);
+          onDragOver(index);
+        }}
+        onDragLeave={() => setIsOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsOver(false);
+          onDrop(index);
+        }}
+        onDragEnd={() => setIsOver(false)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '7px 10px 7px 6px',
+          borderBottom: '1px solid rgba(255,255,255,0.03)',
+          borderTop: isOver ? '2px solid #ff3d6e' : '2px solid transparent',
+          cursor: 'grab',
+          userSelect: 'none',
+          background: 'transparent',
+          transition: 'border-top 0.1s',
+        }}
       >
-        ×
-      </button>
-    </div>
+        <span style={{ color: '#2a2a2a', fontSize: 10, width: 18, textAlign: 'right', flexShrink: 0 }}>
+          {index + 1}
+        </span>
+
+        <span style={{ color: '#444', fontSize: 16, flexShrink: 0, padding: '0 4px' }}>
+          ⠿
+        </span>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ color: '#fff', fontSize: 13, fontWeight: 'bold', fontFamily: 'var(--font-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {song.title}
+          </div>
+          <div style={{ color: '#555', fontSize: 11, fontFamily: 'var(--font-body)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>{song.artist}</span>
+            {miniSet && (
+              <span style={miniSetChipStyle}>{miniSet}</span>
+            )}
+            {item.banter_slot && (
+              <span style={banterChipStyle}>
+                ◉ {banterPositionLabel(item.banter_slot.position)} · {item.banter_slot.duration_seconds}s
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
+          <span style={{ background: song.moodColor + '22', color: song.moodColor, border: `1px solid ${song.moodColor}44`, fontSize: 9, padding: '1px 5px', borderRadius: 2, fontFamily: 'var(--font-body)' }}>
+            {song.mood}
+          </span>
+          <span style={{ color: '#555', fontSize: 11, fontFamily: 'var(--font-body)' }}>
+            {formatDuration(song.duration)}
+          </span>
+        </div>
+
+        <button
+          onMouseDown={e => e.stopPropagation()}
+          onClick={handleSettingsClick}
+          title="Mini-set + banter"
+          style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 14, flexShrink: 0, padding: '0 4px', lineHeight: 1 }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#ffd93d')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#555')}
+        >
+          ⚙
+        </button>
+
+        <button
+          onMouseDown={e => e.stopPropagation()}
+          onClick={onRemove}
+          style={{ background: 'none', border: 'none', color: '#2a2a2a', cursor: 'pointer', fontSize: 18, flexShrink: 0, padding: '0 2px', lineHeight: 1, transition: 'color 0.15s' }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#ff3d6e')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#2a2a2a')}
+        >
+          ×
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -106,6 +156,7 @@ interface SetlistPanelProps {
   onDelete: () => void;
   onRemoveSong: (instanceId: string) => void;
   onReorder: (setlistId: string, fromIndex: number, toIndex: number) => void;
+  onUpdateSong: (setlistId: string, instanceId: string, patch: Partial<SetlistSong>) => void;
   onExport: (setlist: Setlist) => void;
   onPrint: (setlist: Setlist) => void;
   gigName: string;
@@ -122,6 +173,7 @@ export default function SetlistPanel({
   onDelete,
   onRemoveSong,
   onReorder,
+  onUpdateSong,
   onExport,
   onPrint,
   allSongs,
@@ -130,9 +182,9 @@ export default function SetlistPanel({
   const [newName, setNewName] = useState(setlist.name);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [popover, setPopover] = useState<{ song: SetlistSong; rect: DOMRect } | null>(null);
   const dragFromIndex = useRef<number>(-1);
 
-  // Used only when setlist is empty — lets master songs drop in
   const { setNodeRef, isOver: isDropOver } = useDroppable({
     id: `setlist-drop-${setlist.id}`,
     data: { type: 'setlist', setlistId: setlist.id },
@@ -250,18 +302,45 @@ export default function SetlistPanel({
                 onDragStart={handleDragStart}
                 onDragOver={() => {}}
                 onDrop={handleDrop}
+                onOpenSettings={(rect) => setPopover({ song: item, rect })}
                 allSongs={allSongs}
+                previousMiniSet={index === 0 ? null : setlist.songs[index - 1].mini_set ?? null}
               />
             ))
           )}
         </div>
       )}
+
+      {popover && (
+        <SongRowPopover
+          song={popover.song}
+          anchorRect={popover.rect}
+          onClose={() => setPopover(null)}
+          onSave={(patch) => onUpdateSong(setlist.id, popover.song.instanceId, patch)}
+        />
+      )}
     </div>
   );
 }
 
-const btn: React.CSSProperties = {
+const btn: CSSProperties = {
   background: '#1a1a1a', border: '1px solid #2a2a2a', color: '#777',
   borderRadius: 3, padding: '5px 9px', fontSize: 11,
   fontFamily: 'var(--font-body)', cursor: 'pointer', letterSpacing: '0.04em',
+};
+
+const miniSetChipStyle: CSSProperties = {
+  fontSize: 9, fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
+  padding: '1px 5px', borderRadius: 6,
+  background: 'rgba(78,205,196,0.1)', color: '#4ECDC4',
+  border: '0.5px solid rgba(78,205,196,0.3)',
+  letterSpacing: '0.06em',
+};
+
+const banterChipStyle: CSSProperties = {
+  fontSize: 9, fontFamily: 'var(--font-body)',
+  padding: '1px 5px', borderRadius: 6,
+  background: 'rgba(255,217,61,0.08)', color: '#ffd93d',
+  border: '0.5px solid rgba(255,217,61,0.3)',
+  letterSpacing: '0.04em', textTransform: 'uppercase',
 };
