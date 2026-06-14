@@ -32,6 +32,7 @@ import SetlistPanel from '@/components/SetlistPanel';
 import AddSongModal from '@/components/AddSongModal';
 import GenerateSetlistModal from '@/components/GenerateSetlistModal';
 import DebriefModal from '@/components/DebriefModal';
+import VenueScoutModal from '@/components/VenueScoutModal';
 
 type MobileTab = 'songs' | 'gigs' | 'overview';
 
@@ -51,6 +52,7 @@ export default function Dashboard() {
   const [showAddSong, setShowAddSong] = useState(false);
   const [showGenerate, setShowGenerate] = useState(false);
   const [showDebrief, setShowDebrief] = useState(false);
+  const [showScout, setShowScout] = useState(false);
 
   const allSongs: Song[] = useMemo(() => [...SONGS, ...customSongs], [customSongs]);
   const selectedGig = gigs.find(g => g.id === selectedGigId) ?? null;
@@ -338,6 +340,23 @@ export default function Dashboard() {
             <span style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', letterSpacing: '0.1em', color: '#fff' }}>SETLISTS</span>
             <div style={{ display: 'flex', gap: 6 }}>
               <button
+                onClick={() => setShowScout(true)}
+                title="Research the venue — feeds the generator"
+                style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: 10,
+                  background: '#1a1a1a',
+                  color: '#E94E77',
+                  border: '1px solid #E94E77',
+                  cursor: 'pointer',
+                  padding: '4px 10px',
+                  letterSpacing: '0.1em',
+                  fontWeight: 'bold',
+                }}
+              >
+                🔍 SCOUT
+              </button>
+              <button
                 onClick={() => setShowGenerate(true)}
                 title="Generate a setlist from the crowd model"
                 style={{
@@ -611,6 +630,15 @@ export default function Dashboard() {
           gigName={selectedGig?.name ?? 'Gig'}
           onClose={() => setShowDebrief(false)}
           onSaved={() => showToast('Debrief saved — generator will learn from this')}
+        />
+      )}
+
+      {showScout && selectedGigId && selectedGig && (
+        <VenueScoutModal
+          venueName={selectedGig.venue || selectedGig.name || 'Venue'}
+          city=""
+          onClose={() => setShowScout(false)}
+          onSaved={() => showToast('Venue profile saved — generator will use it')}
         />
       )}
     </DndContext>
