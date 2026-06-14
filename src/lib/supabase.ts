@@ -258,3 +258,62 @@ export async function saveGigDebrief(payload: DebriefPayload) {
 
   return outcome;
 }
+
+
+// ── Venue Profiles ──────────────────────────────────────────────────────────
+
+export async function getVenueProfileByName(venueName: string) {
+  const { data, error } = await supabase
+    .from('venue_profiles')
+    .select('*')
+    .ilike('venue_name', venueName.trim())
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function upsertVenueProfile(profile: {
+  venue_name: string;
+  city?: string | null;
+  default_crowd_model_id?: string | null;
+  observed_peak_time?: string | null;
+  typical_crowd_age_range?: string | null;
+  capacity_estimate?: number | null;
+  notes?: string | null;
+}) {
+  // Try to find an existing row by name (case-insensitive), then update or insert.
+  const existing = await getVenueProfileByName(profile.venue_name);
+  if (existing) {
+    const { data, error } = await supabase
+      .from('venue_profiles')
+      .update({
+        city: profile.city ?? existing.city,
+        default_crowd_model_id: profile.default_crowd_model_id ?? existing.default_crowd_model_id,
+        observed_peak_time: profile.observed_peak_time ?? existing.observed_peak_time,
+        typical_crowd_age_range: profile.typical_crowd_age_range ?? existing.typical_crowd_age_range,
+        capacity_estimate: profile.capacity_estimate ?? existing.capacity_estimate,
+        notes: profile.notes ?? existing.notes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existing.id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+  const { data, error } = await supabase
+    .from('venue_profiles')
+    .insert([{
+      venue_name: profile.venue_name.trim(),
+      city: profile.city ?? null,
+      default_crowd_model_id: profile.default_crowd_model_id ?? null,
+      observed_peak_time: profile.observed_peak_time ?? null,
+      typical_crowd_age_range: profile.typical_crowd_age_range ?? null,
+      capacity_estimate: profile.capacity_estimate ?? null,
+      notes: profile.notes ?? null,
+    }])
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
