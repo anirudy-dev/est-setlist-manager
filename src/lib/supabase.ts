@@ -149,3 +149,56 @@ export async function addCustomSong(song: {
   if (error) throw error;
   return data;
 }
+
+
+// ── Set Generator (migration 003 + 004) ─────────────────────────────────────
+
+/** Fetch all available crowd models (Late Night Bar, etc). */
+export async function getCrowdModels() {
+  const { data, error } = await supabase
+    .from('crowd_models')
+    .select('*')
+    .order('id', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+/** Fetch song_attributes for every scored song. */
+export async function getSongAttributes() {
+  const { data, error } = await supabase
+    .from('song_attributes')
+    .select('*');
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Replace a gig's setlists with new ones built from a generator candidate.
+ * Deletes existing setlists for the gig (cascade is per-setlist row), then
+ * inserts the new ones in order.
+ */
+export async function replaceSetlistsForGig(
+  gigId: string,
+  sets: Array<{ name: string; songs: Array<{ instanceId: string; songId: string; position: number }> }>,
+) {
+  // Wipe existing setlists for this gig.
+  const { error: delErr } = await supabase
+    .from('setlists')
+    .delete()
+    .eq('gig_id', gigId);
+  if (delErr) throw delErr;
+
+  // Insert new ones with order_num matching their position in the array.
+  const toInsert = sets.map((s, i) => ({
+    gig_id: gigId,
+    name: s.name,
+    order_num: i,
+    songs: s.songs,
+  }));
+  const { data, error } = await supabase
+    .from('setlists')
+    .insert(toInsert)
+    .select();
+  if (error) throw error;
+  return data;
+}
