@@ -218,6 +218,17 @@ export default function Dashboard() {
     });
   }, []);
 
+  // Update a single song's mini_set / banter_slot fields. Used by SongRowPopover.
+  const handleUpdateSong = useCallback((setlistId: string, instanceId: string, patch: Partial<SetlistSong>) => {
+    setSetlists(prev => {
+      const sl = prev.find(s => s.id === setlistId);
+      if (!sl) return prev;
+      const updated = sl.songs.map(s => s.instanceId === instanceId ? { ...s, ...patch } : s);
+      updateSetlist(setlistId, { songs: updated as unknown[] }).catch(() => {});
+      return prev.map(s => s.id === setlistId ? { ...s, songs: updated } : s);
+    });
+  }, []);
+
   // ── DnD (master list → setlist only) ─────────────────────────────────────
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -408,6 +419,7 @@ export default function Dashboard() {
                   onDelete={() => handleDeleteSetlist(sl.id)}
                   onRemoveSong={instanceId => handleRemoveSong(sl.id, instanceId)}
                   onReorder={handleReorder}
+                  onUpdateSong={handleUpdateSong}
                   onExport={handleExportSet}
                   onPrint={handlePrint}
                   gigName={selectedGig?.name ?? ''}
