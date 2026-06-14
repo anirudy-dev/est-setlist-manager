@@ -30,6 +30,8 @@ import MasterSongList from '@/components/MasterSongList';
 import GigPanel from '@/components/GigPanel';
 import SetlistPanel from '@/components/SetlistPanel';
 import AddSongModal from '@/components/AddSongModal';
+import GenerateSetlistModal from '@/components/GenerateSetlistModal';
+import DebriefModal from '@/components/DebriefModal';
 
 type MobileTab = 'songs' | 'gigs' | 'overview';
 
@@ -47,6 +49,8 @@ export default function Dashboard() {
   const [toast, setToast] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<MobileTab>('gigs');
   const [showAddSong, setShowAddSong] = useState(false);
+  const [showGenerate, setShowGenerate] = useState(false);
+  const [showDebrief, setShowDebrief] = useState(false);
 
   const allSongs: Song[] = useMemo(() => [...SONGS, ...customSongs], [customSongs]);
   const selectedGig = gigs.find(g => g.id === selectedGigId) ?? null;
@@ -214,6 +218,17 @@ export default function Dashboard() {
     });
   }, []);
 
+  // Update a single song's mini_set / banter_slot fields. Used by SongRowPopover.
+  const handleUpdateSong = useCallback((setlistId: string, instanceId: string, patch: Partial<SetlistSong>) => {
+    setSetlists(prev => {
+      const sl = prev.find(s => s.id === setlistId);
+      if (!sl) return prev;
+      const updated = sl.songs.map(s => s.instanceId === instanceId ? { ...s, ...patch } : s);
+      updateSetlist(setlistId, { songs: updated as unknown[] }).catch(() => {});
+      return prev.map(s => s.id === setlistId ? { ...s, songs: updated } : s);
+    });
+  }, []);
+
   // ── DnD (master list → setlist only) ─────────────────────────────────────
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -286,6 +301,20 @@ export default function Dashboard() {
     }
   }, [selectedGigId]);
 
+  // Reload setlists for the currently selected gig — used after the
+  // generator writes a fresh set of setlists.
+  const reloadSetlists = useCallback(async () => {
+    if (!selectedGigId) return;
+    try {
+      const data = await getSetlistsForGig(selectedGigId);
+      const parsed = (data || []).map((s: Record<string, unknown>) => ({
+        ...s,
+        songs: Array.isArray(s.songs) ? s.songs : JSON.parse((s.songs as string) || '[]'),
+      }));
+      setSetlists(parsed as Setlist[]);
+    } catch { /* silent */ }
+  }, [selectedGigId]);
+
   const handleLogout = () => { localStorage.removeItem('est-auth'); router.push('/'); };
 
   const draggingSong = dragSongId ? allSongs.find(s => s.id === dragSongId) : null;
@@ -308,6 +337,23 @@ export default function Dashboard() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <span style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', letterSpacing: '0.1em', color: '#fff' }}>SETLISTS</span>
             <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                onClick={() => setShowGenerate(true)}
+                title="Generate a setlist from the crowd model"
+                style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: 10,
+                  background: '#1a1a1a',
+                  color: '#ffd93d',
+                  border: '1px solid #ffd93d',
+                  cursor: 'pointer',
+                  padding: '4px 10px',
+                  letterSpacing: '0.1em',
+                  fontWeight: 'bold',
+                }}
+              >
+                ✨ GENERATE
+              </button>
               {gigHasSongs && (
                 <button
                   onClick={handleOpenStage}
@@ -325,6 +371,25 @@ export default function Dashboard() {
                   }}
                 >
                   ▶ STAGE
+                </button>
+              )}
+              {gigHasSongs && (
+                <button
+                  onClick={() => setShowDebrief(true)}
+                  title="Rate each song after the gig — feeds the generator"
+                  style={{
+                    fontFamily: 'var(--font-body)',
+                    fontSize: 10,
+                    background: '#1a1a1a',
+                    color: '#4ECDC4',
+                    border: '1px solid #4ECDC4',
+                    cursor: 'pointer',
+                    padding: '4px 10px',
+                    letterSpacing: '0.1em',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  ◉ DEBRIEF
                 </button>
               )}
               {gigSetlists.length > 0 && (
@@ -354,6 +419,7 @@ export default function Dashboard() {
                   onDelete={() => handleDeleteSetlist(sl.id)}
                   onRemoveSong={instanceId => handleRemoveSong(sl.id, instanceId)}
                   onReorder={handleReorder}
+                  onUpdateSong={handleUpdateSong}
                   onExport={handleExportSet}
                   onPrint={handlePrint}
                   gigName={selectedGig?.name ?? ''}
@@ -529,6 +595,24 @@ export default function Dashboard() {
       )}
 
       {showAddSong && <AddSongModal onClose={() => setShowAddSong(false)} onAdded={reloadCustomSongs} />}
+
+      {showGenerate && selectedGigId && (
+        <GenerateSetlistModal
+          gigId={selectedGigId}
+          gigName={selectedGig?.name ?? 'Gig'}
+          onClose={() => setShowGenerate(false)}
+          onApplied={() => { reloadSetlists(); showToast('Setlist generated'); }}
+        />
+      )}
+
+      {showDebrief && selectedGigId && (
+        <DebriefModal
+          gigId={selectedGigId}
+          gigName={selectedGig?.name ?? 'Gig'}
+          onClose={() => setShowDebrief(false)}
+          onSaved={() => showToast('Debrief saved — generator will learn from this')}
+        />
+      )}
     </DndContext>
   );
 }

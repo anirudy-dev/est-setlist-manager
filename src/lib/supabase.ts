@@ -149,3 +149,112 @@ export async function addCustomSong(song: {
   if (error) throw error;
   return data;
 }
+
+
+// ── Set Generator (migration 003 + 004) ─────────────────────────────────────
+
+/** Fetch all available crowd models (Late Night Bar, etc). */
+export async function getCrowdModels() {
+  const { data, error } = await supabase
+    .from('crowd_models')
+    .select('*')
+    .order('id', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+/** Fetch song_attributes for every scored song. */
+export async function getSongAttributes() {
+  const { data, error } = await supabase
+    .from('song_attributes')
+    .select('*');
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Replace a gig's setlists with new ones built from a generator candidate.
+ * Deletes existing setlists for the gig (cascade is per-setlist row), then
+ * inserts the new ones in order.
+ */
+export async function replaceSetlistsForGig(
+  gigId: string,
+  sets: Array<{ name: string; songs: Array<{ instanceId: string; songId: string; position: number }> }>,
+) {
+  // Wipe existing setlists for this gig.
+  const { error: delErr } = await supabase
+    .from('setlists')
+    .delete()
+    .eq('gig_id', gigId);
+  if (delErr) throw delErr;
+
+  // Insert new ones with order_num matching their position in the array.
+  const toInsert = sets.map((s, i) => ({
+    gig_id: gigId,
+    name: s.name,
+    order_num: i,
+    songs: s.songs,
+  }));
+  const { data, error } = await supabase
+    .from('setlists')
+    .insert(toInsert)
+    .select();
+  if (error) throw error;
+  return data;
+}
+
+
+// ── Debrief ─────────────────────────────────────────────────────────────────
+
+interface DebriefPayload {
+  gig_id: string;
+  overall_score: number | null;
+  rebook_signal: boolean | null;
+  notes: string;
+  song_outcomes: Array<{
+    song_id: string;
+    set_position: number;
+    song_position: number;
+    floor_density: number;
+    singalong_heat: number;
+    bar_pull: number;
+  }>;
+}
+
+/**
+ * Save a post-gig debrief: inserts one gig_outcomes row and N song_outcomes
+ * rows. The gig_outcomes row is the parent for cascade delete safety.
+ */
+export async function saveGigDebrief(payload: DebriefPayload) {
+  const { data: outcome, error: outErr } = await supabase
+    .from('gig_outcomes')
+    .insert([{
+      gig_id: payload.gig_id,
+      overall_score: payload.overall_score,
+      rebook_signal: payload.rebook_signal,
+      notes: payload.notes || null,
+    }])
+    .select()
+    .single();
+  if (outErr) throw outErr;
+  if (!outcome) throw new Error('Failed to create gig_outcomes row');
+
+  const songRows = payload.song_outcomes.map((s) => ({
+    gig_outcome_id: outcome.id,
+    song_id: s.song_id,
+    set_position: s.set_position,
+    song_position: s.song_position,
+    floor_density: s.floor_density,
+    singalong_heat: s.singalong_heat,
+    bar_pull: s.bar_pull,
+  }));
+
+  if (songRows.length > 0) {
+    const { error: songErr } = await supabase
+      .from('song_outcomes')
+      .insert(songRows);
+    if (songErr) throw songErr;
+  }
+
+  return outcome;
+}
