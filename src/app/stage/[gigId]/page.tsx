@@ -11,7 +11,15 @@
  * (gigs, setlists, custom_songs). No schema dependency. Safe to ship alone.
  */
 
-import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+  useCallback,
+  type CSSProperties,
+  type TouchEvent as ReactTouchEvent,
+} from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import type { Gig, Setlist, Song } from '@/types';
 import { SONGS, formatDuration } from '@/data/songs';
@@ -25,16 +33,14 @@ type StagePosition = {
   song: Song;
 };
 
-// Lightweight nav typing for wake lock — the global lib.dom type isn't
-// guaranteed across all Next/TS configurations.
-interface WakeLockSentinelLike {
+// Local, opaque type for the screen wake lock. We avoid `extends Navigator`
+// because lib.dom typings collide when widening the wakeLock property.
+type WakeLockSentinelLike = {
   release: () => Promise<void>;
-}
-interface WakeLockNavigator extends Navigator {
-  wakeLock?: {
-    request: (type: 'screen') => Promise<WakeLockSentinelLike>;
-  };
-}
+};
+type WakeLockApi = {
+  request: (type: 'screen') => Promise<WakeLockSentinelLike>;
+};
 
 const COLORS = {
   bg: '#0A0A0B',
@@ -184,10 +190,10 @@ export default function StagePage() {
 
   // Touch swipe (horizontal only; threshold = 60px).
   const touchStartX = useRef<number | null>(null);
-  const onTouchStart = (e: React.TouchEvent) => {
+  const onTouchStart = (e: ReactTouchEvent) => {
     touchStartX.current = e.touches[0]?.clientX ?? null;
   };
-  const onTouchEnd = (e: React.TouchEvent) => {
+  const onTouchEnd = (e: ReactTouchEvent) => {
     if (touchStartX.current === null) return;
     const dx = (e.changedTouches[0]?.clientX ?? touchStartX.current) - touchStartX.current;
     if (dx < -60) advance();
@@ -198,7 +204,7 @@ export default function StagePage() {
   // Wake lock — keep the screen awake while on stage. Re-acquire on
   // visibility change (locking and unlocking the phone releases it).
   useEffect(() => {
-    const nav = navigator as WakeLockNavigator;
+    const nav = navigator as unknown as { wakeLock?: WakeLockApi };
     if (!nav.wakeLock) return;
 
     let lock: WakeLockSentinelLike | null = null;
@@ -372,7 +378,7 @@ export default function StagePage() {
 
 // ── styles ────────────────────────────────────────────────────────────────────
 
-const shellStyle: React.CSSProperties = {
+const shellStyle: CSSProperties = {
   background: COLORS.bg,
   minHeight: '100vh',
   display: 'flex',
@@ -382,14 +388,14 @@ const shellStyle: React.CSSProperties = {
   fontFamily: FONT_BODY,
 };
 
-const loadingStyle: React.CSSProperties = {
+const loadingStyle: CSSProperties = {
   color: COLORS.ink45,
   fontSize: 11,
   letterSpacing: '0.2em',
   textTransform: 'uppercase',
 };
 
-const emptyStyle: React.CSSProperties = {
+const emptyStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
@@ -398,7 +404,7 @@ const emptyStyle: React.CSSProperties = {
   padding: 24,
 };
 
-const emptyEyebrowStyle: React.CSSProperties = {
+const emptyEyebrowStyle: CSSProperties = {
   fontSize: 11,
   letterSpacing: '0.22em',
   textTransform: 'uppercase',
@@ -406,14 +412,14 @@ const emptyEyebrowStyle: React.CSSProperties = {
   marginBottom: 12,
 };
 
-const emptyTitleStyle: React.CSSProperties = {
+const emptyTitleStyle: CSSProperties = {
   fontSize: 18,
   fontWeight: 500,
   color: COLORS.ink,
   marginBottom: 22,
 };
 
-const emptyButtonStyle: React.CSSProperties = {
+const emptyButtonStyle: CSSProperties = {
   background: 'transparent',
   border: `0.5px solid ${COLORS.ink35}`,
   color: COLORS.ink,
@@ -426,7 +432,7 @@ const emptyButtonStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
-const pageStyle: React.CSSProperties = {
+const pageStyle: CSSProperties = {
   background: COLORS.bg,
   minHeight: '100vh',
   display: 'flex',
@@ -439,7 +445,7 @@ const pageStyle: React.CSSProperties = {
   WebkitUserSelect: 'none',
 };
 
-const statusRowStyle: React.CSSProperties = {
+const statusRowStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
@@ -449,32 +455,32 @@ const statusRowStyle: React.CSSProperties = {
   borderBottom: `0.5px solid ${COLORS.hairline}`,
 };
 
-const timeStyle: React.CSSProperties = {
+const timeStyle: CSSProperties = {
   fontFamily: FONT_MONO,
   color: COLORS.ink70,
   minWidth: 60,
 };
 
-const positionStyle: React.CSSProperties = {
+const positionStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 8,
   letterSpacing: '0.04em',
 };
 
-const positionMonoStyle: React.CSSProperties = {
+const positionMonoStyle: CSSProperties = {
   fontFamily: FONT_MONO,
   color: COLORS.ink70,
 };
 
-const dotStyle: React.CSSProperties = {
+const dotStyle: CSSProperties = {
   width: 3,
   height: 3,
   borderRadius: '50%',
   background: COLORS.ink20,
 };
 
-const exitButtonStyle: React.CSSProperties = {
+const exitButtonStyle: CSSProperties = {
   background: 'none',
   border: 'none',
   color: COLORS.ink45,
@@ -488,7 +494,7 @@ const exitButtonStyle: React.CSSProperties = {
   textAlign: 'right',
 };
 
-const eyebrowStyle: React.CSSProperties = {
+const eyebrowStyle: CSSProperties = {
   fontSize: 11,
   fontWeight: 500,
   letterSpacing: '0.22em',
@@ -497,7 +503,7 @@ const eyebrowStyle: React.CSSProperties = {
   margin: '24px 0 10px',
 };
 
-const titleStyle: React.CSSProperties = {
+const titleStyle: CSSProperties = {
   fontSize: 'clamp(36px, 8vw, 64px)',
   fontWeight: 500,
   color: COLORS.ink,
@@ -506,26 +512,26 @@ const titleStyle: React.CSSProperties = {
   lineHeight: 1.02,
 };
 
-const artistStyle: React.CSSProperties = {
+const artistStyle: CSSProperties = {
   fontSize: 16,
   color: COLORS.ink70,
   margin: '10px 0 0',
 };
 
-const metaRowStyle: React.CSSProperties = {
+const metaRowStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 10,
   marginTop: 16,
 };
 
-const durationStyle: React.CSSProperties = {
+const durationStyle: CSSProperties = {
   fontSize: 13,
   color: COLORS.ink55,
   fontFamily: FONT_MONO,
 };
 
-const moodChipStyle: React.CSSProperties = {
+const moodChipStyle: CSSProperties = {
   fontSize: 10,
   padding: '2px 9px',
   border: '0.5px solid',
@@ -535,12 +541,12 @@ const moodChipStyle: React.CSSProperties = {
   fontWeight: 500,
 };
 
-const nextBlockStyle: React.CSSProperties = {
+const nextBlockStyle: CSSProperties = {
   padding: '16px 0 6px',
   borderTop: `0.5px solid ${COLORS.hairline}`,
 };
 
-const nextEyebrowStyle: React.CSSProperties = {
+const nextEyebrowStyle: CSSProperties = {
   fontSize: 10,
   fontWeight: 500,
   letterSpacing: '0.22em',
@@ -549,7 +555,7 @@ const nextEyebrowStyle: React.CSSProperties = {
   margin: '0 0 10px',
 };
 
-const nextTitleStyle: React.CSSProperties = {
+const nextTitleStyle: CSSProperties = {
   fontSize: 22,
   fontWeight: 500,
   color: COLORS.ink70,
@@ -558,13 +564,13 @@ const nextTitleStyle: React.CSSProperties = {
   lineHeight: 1.1,
 };
 
-const nextArtistStyle: React.CSSProperties = {
+const nextArtistStyle: CSSProperties = {
   fontSize: 13,
   color: COLORS.ink45,
   margin: '4px 0 0',
 };
 
-const setChangeStyle: React.CSSProperties = {
+const setChangeStyle: CSSProperties = {
   fontSize: 10,
   fontWeight: 500,
   letterSpacing: '0.2em',
@@ -573,13 +579,13 @@ const setChangeStyle: React.CSSProperties = {
   margin: '14px 0 0',
 };
 
-const endOfNightStyle: React.CSSProperties = {
+const endOfNightStyle: CSSProperties = {
   padding: '16px 0',
   borderTop: `0.5px solid ${COLORS.hairline}`,
   textAlign: 'center',
 };
 
-const endOfNightTextStyle: React.CSSProperties = {
+const endOfNightTextStyle: CSSProperties = {
   fontSize: 11,
   fontWeight: 500,
   letterSpacing: '0.2em',
@@ -588,7 +594,7 @@ const endOfNightTextStyle: React.CSSProperties = {
   margin: 0,
 };
 
-const footerRowStyle: React.CSSProperties = {
+const footerRowStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -596,7 +602,7 @@ const footerRowStyle: React.CSSProperties = {
   paddingTop: 14,
 };
 
-const arrowButtonStyle: React.CSSProperties = {
+const arrowButtonStyle: CSSProperties = {
   background: 'none',
   border: 'none',
   fontSize: 22,
@@ -604,7 +610,7 @@ const arrowButtonStyle: React.CSSProperties = {
   fontFamily: FONT_BODY,
 };
 
-const hintStyle: React.CSSProperties = {
+const hintStyle: CSSProperties = {
   fontSize: 10,
   letterSpacing: '0.2em',
   textTransform: 'uppercase',
