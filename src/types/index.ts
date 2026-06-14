@@ -1,3 +1,7 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Core song / setlist / gig
+// ─────────────────────────────────────────────────────────────────────────────
+
 export interface Song {
   id: string;
   title: string;
@@ -10,10 +14,32 @@ export interface Song {
   energy: 'low' | 'medium' | 'high';
 }
 
+/** Six legitimate banter moments. One per song max — enforced. */
+export type BanterPosition =
+  | 'intro'
+  | 'pre_solo'
+  | 'post_solo'
+  | 'outro'
+  | 'breakdown'
+  | 'tag';
+
+export interface BanterSlot {
+  position: BanterPosition;
+  duration_seconds: number;
+  notes?: string;
+}
+
+/** Mini-set assignment within a parent set. 'A' | 'B' | 'C' | 'D'. */
+export type MiniSet = 'A' | 'B' | 'C' | 'D';
+
 export interface SetlistSong {
   instanceId: string; // unique per drag (allows duplicates)
   songId: string;
   position: number;
+  /** Optional grouping inside a Set. e.g. Set 1A vs Set 1B. */
+  mini_set?: MiniSet | null;
+  /** Optional banter slot scheduled in this song. Max one per song. */
+  banter_slot?: BanterSlot | null;
 }
 
 export interface Setlist {
@@ -36,14 +62,13 @@ export interface Gig {
 }
 
 
-// ── Set Generator Foundation (migration 003) ────────────────────────────────
-// Mirror of the schema in migrations/003_set_generator_foundation.sql.
-// Snake_case is preserved because that's what Supabase returns.
+// ─────────────────────────────────────────────────────────────────────────────
+// Set Generator Foundation (migration 003)
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * A crowd model captures the physics of a particular kind of gig — the arc,
- * the BPM bands, the lifeline frequency, the openers and closers. The
- * generator reads this to build set lists that fit the room.
+ * the BPM bands, the lifeline frequency, the openers and closers.
  */
 export interface CrowdModel {
   id: string;
@@ -84,7 +109,6 @@ export interface CrowdModelPhase {
   last_n_songs_required?: { n: number; must_have: string[] };
 }
 
-/** What we've learned about a specific venue over time. */
 export interface VenueProfile {
   id: string;
   venue_name: string;
@@ -114,11 +138,14 @@ export interface SongAttributes {
   glue_song: boolean;
   singalong_anchor: boolean;
   bpm_felt: number | null;
+  /** Key root note (A-G, optionally with # / b). */
+  key_root?: string | null;
+  /** Key mode. */
+  key_mode?: 'major' | 'minor' | null;
   created_at: string;
   updated_at: string;
 }
 
-/** One row per gig — the post-gig debrief. */
 export interface GigOutcome {
   id: string;
   gig_id: string;
@@ -132,7 +159,6 @@ export interface GigOutcome {
   created_at: string;
 }
 
-/** One row per song played at a gig — the training signal for the model. */
 export interface SongOutcome {
   id: string;
   gig_outcome_id: string;
@@ -143,4 +169,40 @@ export interface SongOutcome {
   singalong_heat: number | null;
   bar_pull: number | null;
   created_at: string;
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Display helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Human-readable label for a banter position. */
+export function banterPositionLabel(p: BanterPosition): string {
+  switch (p) {
+    case 'intro': return 'Intro';
+    case 'pre_solo': return 'Pre-solo';
+    case 'post_solo': return 'Post-solo';
+    case 'outro': return 'Outro';
+    case 'breakdown': return 'Breakdown';
+    case 'tag': return 'Tag';
+  }
+}
+
+/** "Set 1A" given parent set name and mini-set letter, or "Set 1" if no mini-set. */
+export function formatSetLabel(parentSetName: string, miniSet: MiniSet | null | undefined): string {
+  // Strip a trailing "Set 1" / "Set 2" and append letter if mini-set present.
+  // Falls back to original name if no recognizable pattern.
+  const match = parentSetName.match(/^(.*?)(\d+)\s*$/);
+  if (!miniSet) return parentSetName;
+  if (match) {
+    return `${match[1].trim()}${match[2]}${miniSet}`;
+  }
+  return `${parentSetName} ${miniSet}`;
+}
+
+/** Format key: "E major" -> "E maj", "F# minor" -> "F#m". */
+export function formatKey(root?: string | null, mode?: 'major' | 'minor' | null): string | null {
+  if (!root) return null;
+  if (mode === 'minor') return `${root}m`;
+  return root;
 }
