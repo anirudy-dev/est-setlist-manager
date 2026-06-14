@@ -31,6 +31,7 @@ import GigPanel from '@/components/GigPanel';
 import SetlistPanel from '@/components/SetlistPanel';
 import AddSongModal from '@/components/AddSongModal';
 import GenerateSetlistModal from '@/components/GenerateSetlistModal';
+import DebriefModal from '@/components/DebriefModal';
 
 type MobileTab = 'songs' | 'gigs' | 'overview';
 
@@ -49,6 +50,7 @@ export default function Dashboard() {
   const [mobileTab, setMobileTab] = useState<MobileTab>('gigs');
   const [showAddSong, setShowAddSong] = useState(false);
   const [showGenerate, setShowGenerate] = useState(false);
+  const [showDebrief, setShowDebrief] = useState(false);
 
   const allSongs: Song[] = useMemo(() => [...SONGS, ...customSongs], [customSongs]);
   const selectedGig = gigs.find(g => g.id === selectedGigId) ?? null;
@@ -360,6 +362,25 @@ export default function Dashboard() {
                   ▶ STAGE
                 </button>
               )}
+              {gigHasSongs && (
+                <button
+                  onClick={() => setShowDebrief(true)}
+                  title="Rate each song after the gig — feeds the generator"
+                  style={{
+                    fontFamily: 'var(--font-body)',
+                    fontSize: 10,
+                    background: '#1a1a1a',
+                    color: '#4ECDC4',
+                    border: '1px solid #4ECDC4',
+                    cursor: 'pointer',
+                    padding: '4px 10px',
+                    letterSpacing: '0.1em',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  ◉ DEBRIEF
+                </button>
+              )}
               {gigSetlists.length > 0 && (
                 <button onClick={handleExportGig} style={{ fontFamily: 'var(--font-body)', fontSize: 10, background: '#1a1a1a', color: '#aaa', border: '1px solid #2a2a2a', cursor: 'pointer', padding: '4px 10px', letterSpacing: '0.08em' }}>
                   GIG PDF
@@ -569,6 +590,15 @@ export default function Dashboard() {
           gigName={selectedGig?.name ?? 'Gig'}
           onClose={() => setShowGenerate(false)}
           onApplied={() => { reloadSetlists(); showToast('Setlist generated'); }}
+        />
+      )}
+
+      {showDebrief && selectedGigId && (
+        <DebriefModal
+          gigId={selectedGigId}
+          gigName={selectedGig?.name ?? 'Gig'}
+          onClose={() => setShowDebrief(false)}
+          onSaved={() => showToast('Debrief saved — generator will learn from this')}
         />
       )}
     </DndContext>
