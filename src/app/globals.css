@@ -1,59 +1,170 @@
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+/* ─────────────────────────────────────────────────────────────────────────────
+   EST Setlist Manager — Design System v2
+   Light, warm, generous. Same flows, completely new surface.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --font-display: 'Bebas Neue', Impact, sans-serif;
-  --font-body: 'Space Mono', 'Courier New', monospace;
+  /* Type */
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+
+  /* Surface — warm light palette */
+  --bg-app: #F7F4EF;          /* page background — warm cream */
+  --bg-surface: #FFFFFF;       /* cards, panels */
+  --bg-subtle: #F0EDE7;        /* hover, faint sections */
+  --bg-elevated: #FFFFFF;      /* modals */
+
+  /* Ink */
+  --ink-1: #1A1A1A;            /* primary text */
+  --ink-2: #4A4A4A;            /* secondary */
+  --ink-3: #7A7A7A;            /* tertiary, muted */
+  --ink-4: #B0AFA9;            /* placeholder */
+  --ink-inverse: #FFFFFF;
+
+  /* Brand */
+  --brand-pink: #E94E77;
+  --brand-teal: #2FB07B;
+  --brand-yellow: #F0A22F;
+  --brand-coral: #FF6B6B;
+  --brand-blue: #3A6FE8;
+
+  /* Borders */
+  --border-soft: rgba(0,0,0,0.06);
+  --border-medium: rgba(0,0,0,0.12);
+  --border-strong: rgba(0,0,0,0.2);
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(20, 15, 5, 0.04), 0 0 0 0.5px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(20, 15, 5, 0.06), 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-lg: 0 16px 40px rgba(20, 15, 5, 0.12), 0 4px 12px rgba(0,0,0,0.06);
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 9999px;
+
+  /* Spacing scale (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
 }
 
 * { box-sizing: border-box; }
 
 html, body {
-  background-color: #080808;
-  color: #ffffff;
+  background: var(--bg-app);
+  color: var(--ink-1);
   font-family: var(--font-body);
   min-height: 100vh;
   margin: 0;
   padding: 0;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: #080808; }
-::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: #555; }
+/* Scrollbar — quiet */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22); }
 
-.mood-badge {
+/* Inputs share the body font */
+input, textarea, select, button {
   font-family: var(--font-body);
-  font-size: 9px;
-  font-weight: 700;
+}
+
+/* Reusable utility-ish classes */
+.card {
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 0.5px solid var(--border-soft);
+}
+
+.btn-primary {
+  background: var(--brand-pink);
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.05s;
+}
+.btn-primary:hover { filter: brightness(0.96); }
+.btn-primary:active { transform: translateY(0.5px); }
+.btn-primary:disabled { background: var(--ink-4); cursor: default; }
+
+.btn-secondary {
+  background: var(--bg-surface);
+  color: var(--ink-1);
+  border: 0.5px solid var(--border-medium);
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-secondary:hover { background: var(--bg-subtle); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-2);
+  border: none;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-ghost:hover { background: var(--bg-subtle); color: var(--ink-1); }
+
+.label-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 2px 6px;
-  border-radius: 2px;
-  white-space: nowrap;
+  color: var(--ink-3);
 }
 
-.song-row {
-  transition: background 0.1s ease;
-  cursor: grab;
-}
-.song-row:active { cursor: grabbing; }
-.song-row:hover { background: rgba(255,255,255,0.04); }
-
-input, textarea, select {
-  font-family: var(--font-body);
-}
-
-@media print {
-  body { background: white !important; color: black !important; }
-  .no-print { display: none !important; }
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: var(--radius-pill);
+  background: var(--bg-subtle);
+  color: var(--ink-2);
+  border: 0.5px solid var(--border-soft);
 }
 
+/* Animations */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .animate-fade-in { animation: fadeIn 0.4s ease-out; }
 .animate-slide-up { animation: slideUp 0.3s ease-out; }
+
+/* Print */
+@media print {
+  body { background: white !important; color: black !important; }
+  .no-print { display: none !important; }
+}
