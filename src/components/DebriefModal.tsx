@@ -2,28 +2,12 @@
 
 /**
  * DebriefModal — post-gig debrief flow.
- *
- * After a gig, the band opens this modal, rates each song that was played
- * on three dimensions (floor density, singalong heat, bar pull), and gives
- * the night an overall score. The result feeds the generator's learning
- * loop — over a dozen gigs, the model starts to know what actually works
- * at each venue with each crowd model.
- *
- * Minimal UI: one row per song with three sliders (1-5), a notes textarea,
- * an overall 1-5 score, and a rebook-signal toggle. Saves to gig_outcomes
- * + song_outcomes via two Supabase writes.
- *
- * Dark theme to match the dashboard.
  */
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type { Setlist, Song } from '@/types';
 import { SONGS, formatDuration } from '@/data/songs';
-import {
-  getSetlistsForGig,
-  getCustomSongs,
-  saveGigDebrief,
-} from '@/lib/supabase';
+import { getSetlistsForGig, getCustomSongs, saveGigDebrief } from '@/lib/supabase';
 
 interface Props {
   gigId: string;
@@ -36,10 +20,16 @@ interface SongRating {
   songId: string;
   setPosition: number;
   songPosition: number;
-  floorDensity: number;     // 1-5
-  singalongHeat: number;    // 1-5
-  barPull: number;          // 1-5  (1 = floor packed, 5 = bar packed)
+  floorDensity: number;
+  singalongHeat: number;
+  barPull: number;
 }
+
+const DIM_COLORS: Record<'floorDensity' | 'singalongHeat' | 'barPull', string> = {
+  floorDensity: 'var(--brand-pink)',
+  singalongHeat: 'var(--brand-teal)',
+  barPull: 'var(--brand-yellow)',
+};
 
 export default function DebriefModal({ gigId, gigName, onClose, onSaved }: Props) {
   const [setlists, setSetlists] = useState<Setlist[]>([]);
@@ -65,9 +55,7 @@ export default function DebriefModal({ gigId, gigName, onClose, onSaved }: Props
         if (cancelled) return;
         const parsed: Setlist[] = ((setlistsData ?? []) as Array<Record<string, unknown>>).map((s) => ({
           ...(s as unknown as Setlist),
-          songs: (Array.isArray(s.songs)
-            ? (s.songs as Setlist['songs'])
-            : JSON.parse((s.songs as string) || '[]')) as Setlist['songs'],
+          songs: (Array.isArray(s.songs) ? (s.songs as Setlist['songs']) : JSON.parse((s.songs as string) || '[]')) as Setlist['songs'],
         }));
         setSetlists(parsed);
 
@@ -84,19 +72,11 @@ export default function DebriefModal({ gigId, gigName, onClose, onSaved }: Props
         }));
         setSongs([...SONGS, ...mappedCustom]);
 
-        // Seed default ratings of 3 across the board.
         const seed: Record<string, SongRating> = {};
         parsed.forEach((sl: Setlist, setIdx: number) => {
           sl.songs.forEach((item: Setlist['songs'][number], songIdx: number) => {
             const key = `${setIdx}-${songIdx}-${item.songId}`;
-            seed[key] = {
-              songId: item.songId,
-              setPosition: setIdx + 1,
-              songPosition: songIdx + 1,
-              floorDensity: 3,
-              singalongHeat: 3,
-              barPull: 3,
-            };
+            seed[key] = { songId: item.songId, setPosition: setIdx + 1, songPosition: songIdx + 1, floorDensity: 3, singalongHeat: 3, barPull: 3 };
           });
         });
         setRatings(seed);
@@ -106,12 +86,7 @@ export default function DebriefModal({ gigId, gigName, onClose, onSaved }: Props
     return () => { cancelled = true; };
   }, [gigId]);
 
-  const songsLookup = useMemo(() => {
-    const m = new Map<string, Song>();
-    for (const s of songs) m.set(s.id, s);
-    return m;
-  }, [songs]);
-
+  const songsLookup = useMemo(() => { const m = new Map<string, Song>(); for (const s of songs) m.set(s.id, s); return m; }, [songs]);
   const totalSongs = Object.keys(ratings).length;
 
   const handleRate = (key: string, dim: 'floorDensity' | 'singalongHeat' | 'barPull', value: number) => {
@@ -140,9 +115,7 @@ export default function DebriefModal({ gigId, gigName, onClose, onSaved }: Props
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save debrief');
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
   return (
@@ -150,311 +123,145 @@ export default function DebriefModal({ gigId, gigName, onClose, onSaved }: Props
       <div style={modalStyle} onClick={(e) => e.stopPropagation()} role="dialog">
         <div style={headerStyle}>
           <div>
-            <div style={eyebrowStyle}>Post-gig debrief</div>
+            <div className="label-eyebrow" style={{ marginBottom: 4 }}>Post-gig debrief</div>
             <h2 style={titleStyle}>{gigName}</h2>
-            <div style={subtitleStyle}>
-              Rate each song. 60 seconds. Feeds the generator.
-            </div>
+            <p style={subtitleStyle}>Rate every song you played. Sixty seconds. The generator learns what landed.</p>
           </div>
-          <button onClick={onClose} aria-label="Close" style={closeButtonStyle}>×</button>
+          <button onClick={onClose} aria-label="Close" style={closeButtonStyle}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>×</button>
         </div>
 
         <div style={bodyStyle}>
           {loading && <div style={mutedStyle}>Loading setlist…</div>}
           {!loading && error && <div style={errorStyle}>{error}</div>}
-          {!loading && totalSongs === 0 && (
-            <div style={mutedStyle}>No songs in this gig's setlists. Build it first, then debrief.</div>
-          )}
+          {!loading && totalSongs === 0 && <div style={mutedStyle}>No songs in this gig&apos;s setlists. Build it first, then debrief.</div>}
 
           {!loading && totalSongs > 0 && (
             <>
               {setlists.map((sl, setIdx) => (
                 <div key={sl.id} style={setBlockStyle}>
-                  <div style={setHeaderStyle}>{sl.name}</div>
-                  {sl.songs.map((item, songIdx) => {
-                    const key = `${setIdx}-${songIdx}-${item.songId}`;
-                    const rating = ratings[key];
-                    const song = songsLookup.get(item.songId);
-                    if (!rating || !song) return null;
-                    return (
-                      <div key={key} style={songRowStyle}>
-                        <div style={songMetaStyle}>
-                          <span style={songIndexStyle}>{songIdx + 1}.</span>
-                          <span style={songTitleStyle}>{song.title}</span>
-                          <span style={songArtistStyle}>{song.artist}</span>
-                          <span style={songDurationStyle}>{formatDuration(song.duration)}</span>
+                  <div style={setHeaderStyle}>
+                    <span style={setNameStyle}>{sl.name}</span>
+                    <span style={setCountStyle}>{sl.songs.length} {sl.songs.length === 1 ? 'song' : 'songs'}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {sl.songs.map((item, songIdx) => {
+                      const key = `${setIdx}-${songIdx}-${item.songId}`;
+                      const rating = ratings[key];
+                      const song = songsLookup.get(item.songId);
+                      if (!rating || !song) return null;
+                      return (
+                        <div key={key} style={songRowStyle}>
+                          <div style={songMetaStyle}>
+                            <span style={songIndexStyle}>{songIdx + 1}</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                              <span style={songTitleStyle}>{song.title}</span>
+                              <span style={songArtistStyle}>{song.artist} · {formatDuration(song.duration)}</span>
+                            </div>
+                          </div>
+                          <div style={ratingsRowStyle}>
+                            <RatingBar label="Floor" value={rating.floorDensity} color={DIM_COLORS.floorDensity} onChange={(v) => handleRate(key, 'floorDensity', v)} />
+                            <RatingBar label="Singalong" value={rating.singalongHeat} color={DIM_COLORS.singalongHeat} onChange={(v) => handleRate(key, 'singalongHeat', v)} />
+                            <RatingBar label="Bar" value={rating.barPull} color={DIM_COLORS.barPull} onChange={(v) => handleRate(key, 'barPull', v)} />
+                          </div>
                         </div>
-                        <div style={ratingsRowStyle}>
-                          <RatingBar
-                            label="Floor"
-                            value={rating.floorDensity}
-                            onChange={(v) => handleRate(key, 'floorDensity', v)}
-                          />
-                          <RatingBar
-                            label="Singalong"
-                            value={rating.singalongHeat}
-                            onChange={(v) => handleRate(key, 'singalongHeat', v)}
-                          />
-                          <RatingBar
-                            label="Bar"
-                            value={rating.barPull}
-                            onChange={(v) => handleRate(key, 'barPull', v)}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               ))}
 
-              {/* Overall */}
               <div style={overallBlockStyle}>
-                <div style={overallLabelStyle}>How was the night overall?</div>
-                <div style={overallRowStyle}>
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <button
-                      key={n}
-                      onClick={() => setOverallScore(n)}
-                      style={n === overallScore ? scoreButtonActiveStyle : scoreButtonStyle}
-                    >
-                      {n}
-                    </button>
-                  ))}
+                <div>
+                  <div style={overallLabelStyle}>How was the night overall?</div>
+                  <div style={overallRowStyle}>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button key={n} onClick={() => setOverallScore(n)} style={n === overallScore ? scoreButtonActiveStyle : scoreButtonStyle}
+                        onMouseEnter={e => { if (n !== overallScore) e.currentTarget.style.background = 'var(--bg-subtle)'; }}
+                        onMouseLeave={e => { if (n !== overallScore) e.currentTarget.style.background = 'var(--bg-surface)'; }}>{n}</button>
+                    ))}
+                  </div>
                 </div>
 
-                <div style={overallLabelStyle}>Did the venue ask about rebooking?</div>
-                <div style={overallRowStyle}>
-                  <button
-                    onClick={() => setRebookSignal(true)}
-                    style={rebookSignal === true ? scoreButtonActiveStyle : scoreButtonStyle}
-                  >Yes</button>
-                  <button
-                    onClick={() => setRebookSignal(false)}
-                    style={rebookSignal === false ? scoreButtonActiveStyle : scoreButtonStyle}
-                  >No</button>
-                  <button
-                    onClick={() => setRebookSignal(null)}
-                    style={rebookSignal === null ? scoreButtonActiveStyle : scoreButtonStyle}
-                  >Unsure</button>
+                <div>
+                  <div style={overallLabelStyle}>Did the venue ask about rebooking?</div>
+                  <div style={overallRowStyle}>
+                    <button onClick={() => setRebookSignal(true)} style={rebookSignal === true ? choiceButtonActiveStyle : choiceButtonStyle}>Yes</button>
+                    <button onClick={() => setRebookSignal(false)} style={rebookSignal === false ? choiceButtonActiveStyle : choiceButtonStyle}>No</button>
+                    <button onClick={() => setRebookSignal(null)} style={rebookSignal === null ? choiceButtonActiveStyle : choiceButtonStyle}>Unsure</button>
+                  </div>
                 </div>
 
-                <div style={overallLabelStyle}>Notes (optional)</div>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="What worked. What didn't. Anything we want to remember next time."
-                  rows={3}
-                  style={notesStyle}
-                />
+                <div>
+                  <div style={overallLabelStyle}>Notes (optional)</div>
+                  <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What worked. What didn't. Anything we want to remember next time." rows={3} style={notesStyle} />
+                </div>
               </div>
             </>
           )}
         </div>
 
         <div style={footerStyle}>
-          <button onClick={onClose} style={ghostButtonStyle}>Cancel</button>
-          <button
-            onClick={handleSave}
-            disabled={saving || totalSongs === 0}
-            style={!saving && totalSongs > 0 ? primaryButtonStyle : primaryButtonDisabledStyle}
-          >
-            {saving ? 'Saving…' : 'Save debrief'}
-          </button>
+          <button onClick={onClose} style={ghostButtonStyle}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-surface)')}>Cancel</button>
+          <button onClick={handleSave} disabled={saving || totalSongs === 0} style={!saving && totalSongs > 0 ? primaryButtonStyle : primaryButtonDisabledStyle}
+            onMouseEnter={e => { if (!saving && totalSongs > 0) e.currentTarget.style.filter = 'brightness(0.96)'; }}
+            onMouseLeave={e => (e.currentTarget.style.filter = 'brightness(1)')}>{saving ? 'Saving…' : 'Save debrief'}</button>
         </div>
       </div>
     </div>
   );
 }
 
-function RatingBar({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+function RatingBar({ label, value, color, onChange }: { label: string; value: number; color: string; onChange: (v: number) => void }) {
   return (
     <div style={ratingBarStyle}>
       <span style={ratingLabelStyle}>{label}</span>
       <div style={ratingDotsStyle}>
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button
-            key={n}
-            type="button"
-            onClick={() => onChange(n)}
-            aria-label={`${label} ${n}`}
-            style={n <= value ? ratingDotFilledStyle : ratingDotEmptyStyle}
-          />
-        ))}
+        {[1, 2, 3, 4, 5].map((n) => {
+          const filled = n <= value;
+          return (<button key={n} type="button" onClick={() => onChange(n)} aria-label={`${label} ${n}`} style={filled ? { ...ratingDotBase, background: color, borderColor: color } : ratingDotEmptyStyle} />);
+        })}
       </div>
     </div>
   );
 }
 
-// ── styles ────────────────────────────────────────────────────────────────────
-
-const backdropStyle: CSSProperties = {
-  position: 'fixed', inset: 0, zIndex: 10_000,
-  background: 'rgba(0,0,0,0.72)',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  padding: 16,
-  fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, sans-serif',
-};
-
-const modalStyle: CSSProperties = {
-  background: '#0F0F11', border: '1px solid #1f1f24', borderRadius: 12,
-  width: 'min(900px, 100%)', maxHeight: 'calc(100vh - 32px)',
-  display: 'flex', flexDirection: 'column', color: '#F5F2EE', overflow: 'hidden',
-};
-
-const headerStyle: CSSProperties = {
-  display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-  padding: '20px 24px 16px', borderBottom: '0.5px solid #1f1f24',
-};
-
-const eyebrowStyle: CSSProperties = {
-  fontSize: 10, fontWeight: 500, letterSpacing: '0.2em', textTransform: 'uppercase',
-  color: 'rgba(245,242,238,0.45)',
-};
-
-const titleStyle: CSSProperties = {
-  fontSize: 22, fontWeight: 500, margin: '6px 0 0', letterSpacing: '-0.018em',
-};
-
-const subtitleStyle: CSSProperties = {
-  fontSize: 12, color: 'rgba(245,242,238,0.6)', marginTop: 6,
-};
-
-const closeButtonStyle: CSSProperties = {
-  background: 'none', border: 'none', color: 'rgba(245,242,238,0.55)',
-  fontSize: 28, lineHeight: 1, cursor: 'pointer', padding: '0 6px',
-};
-
-const bodyStyle: CSSProperties = {
-  flex: 1, overflowY: 'auto', padding: '16px 24px',
-  display: 'flex', flexDirection: 'column', gap: 14,
-};
-
-const mutedStyle: CSSProperties = {
-  color: 'rgba(245,242,238,0.4)', fontSize: 12,
-  textAlign: 'center', padding: '24px 0',
-};
-
-const errorStyle: CSSProperties = {
-  color: '#ff6b6b', fontSize: 12, padding: 12,
-  border: '0.5px solid rgba(255,107,107,0.3)', borderRadius: 6,
-  background: 'rgba(255,107,107,0.05)',
-};
-
-const setBlockStyle: CSSProperties = {
-  border: '0.5px solid #1f1f24', borderRadius: 8, padding: 14,
-};
-
-const setHeaderStyle: CSSProperties = {
-  fontSize: 12, fontWeight: 500, letterSpacing: '0.14em', textTransform: 'uppercase',
-  paddingBottom: 8, marginBottom: 8, borderBottom: '0.5px solid #1f1f24',
-};
-
-const songRowStyle: CSSProperties = {
-  padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)',
-  display: 'flex', flexDirection: 'column', gap: 6,
-};
-
-const songMetaStyle: CSSProperties = {
-  display: 'grid', gridTemplateColumns: '24px 1fr auto auto', gap: 8,
-  alignItems: 'baseline', fontSize: 12,
-};
-
-const songIndexStyle: CSSProperties = {
-  color: 'rgba(245,242,238,0.4)',
-  fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
-};
-
-const songTitleStyle: CSSProperties = { color: '#F5F2EE', fontWeight: 500 };
-const songArtistStyle: CSSProperties = { color: 'rgba(245,242,238,0.55)' };
-
-const songDurationStyle: CSSProperties = {
-  color: 'rgba(245,242,238,0.4)',
-  fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
-};
-
-const ratingsRowStyle: CSSProperties = {
-  display: 'flex', gap: 16, paddingLeft: 32,
-};
-
-const ratingBarStyle: CSSProperties = {
-  display: 'flex', flexDirection: 'column', gap: 4,
-};
-
-const ratingLabelStyle: CSSProperties = {
-  fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase',
-  color: 'rgba(245,242,238,0.45)',
-};
-
-const ratingDotsStyle: CSSProperties = {
-  display: 'flex', gap: 4,
-};
-
-const ratingDotFilledStyle: CSSProperties = {
-  width: 14, height: 14, borderRadius: '50%',
-  background: '#ffd93d', border: '1px solid #ffd93d',
-  cursor: 'pointer', padding: 0,
-};
-
-const ratingDotEmptyStyle: CSSProperties = {
-  width: 14, height: 14, borderRadius: '50%',
-  background: 'transparent', border: '1px solid rgba(245,242,238,0.3)',
-  cursor: 'pointer', padding: 0,
-};
-
-const overallBlockStyle: CSSProperties = {
-  border: '0.5px solid #1f1f24', borderRadius: 8, padding: 14,
-  display: 'flex', flexDirection: 'column', gap: 8,
-};
-
-const overallLabelStyle: CSSProperties = {
-  fontSize: 11, fontWeight: 500, letterSpacing: '0.16em', textTransform: 'uppercase',
-  color: 'rgba(245,242,238,0.55)', marginTop: 6,
-};
-
-const overallRowStyle: CSSProperties = {
-  display: 'flex', gap: 6,
-};
-
-const scoreButtonStyle: CSSProperties = {
-  background: '#1a1a1a', color: 'rgba(245,242,238,0.7)',
-  border: '0.5px solid #2a2a32', padding: '6px 14px',
-  fontSize: 12, cursor: 'pointer', borderRadius: 6,
-  fontFamily: 'inherit', minWidth: 40,
-};
-
-const scoreButtonActiveStyle: CSSProperties = {
-  ...scoreButtonStyle,
-  background: '#ffd93d', color: '#0F0F11', borderColor: '#ffd93d',
-  fontWeight: 600,
-};
-
-const notesStyle: CSSProperties = {
-  background: '#16161a', color: '#F5F2EE',
-  border: '0.5px solid #2a2a32', borderRadius: 6,
-  padding: 10, fontSize: 12, fontFamily: 'inherit',
-  resize: 'vertical', minHeight: 60,
-};
-
-const footerStyle: CSSProperties = {
-  display: 'flex', justifyContent: 'flex-end', gap: 8,
-  padding: '14px 24px', borderTop: '0.5px solid #1f1f24',
-};
-
-const ghostButtonStyle: CSSProperties = {
-  background: 'transparent', color: 'rgba(245,242,238,0.7)',
-  border: '0.5px solid #2a2a32', padding: '8px 16px',
-  fontSize: 12, cursor: 'pointer', borderRadius: 6,
-  fontFamily: 'inherit',
-};
-
-const primaryButtonStyle: CSSProperties = {
-  background: '#ffd93d', color: '#0F0F11', border: 'none',
-  padding: '8px 18px', fontSize: 12, fontWeight: 600,
-  letterSpacing: '0.06em', cursor: 'pointer', borderRadius: 6,
-  fontFamily: 'inherit',
-};
-
-const primaryButtonDisabledStyle: CSSProperties = {
-  ...primaryButtonStyle,
-  background: 'rgba(255,217,61,0.3)', cursor: 'default',
-};
+const backdropStyle: CSSProperties = { position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(26, 26, 26, 0.42)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, fontFamily: 'var(--font-body)' };
+const modalStyle: CSSProperties = { background: 'var(--bg-elevated)', border: '0.5px solid var(--border-soft)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-lg)', width: 'min(900px, 100%)', maxHeight: 'calc(100vh - 32px)', display: 'flex', flexDirection: 'column', color: 'var(--ink-1)', overflow: 'hidden' };
+const headerStyle: CSSProperties = { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, padding: '20px 24px 16px', borderBottom: '0.5px solid var(--border-soft)' };
+const titleStyle: CSSProperties = { fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, margin: '2px 0 0', color: 'var(--ink-1)', letterSpacing: '-0.01em' };
+const subtitleStyle: CSSProperties = { fontSize: 13, color: 'var(--ink-3)', margin: '6px 0 0', lineHeight: 1.5, maxWidth: 540 };
+const closeButtonStyle: CSSProperties = { background: 'transparent', border: 'none', color: 'var(--ink-3)', fontSize: 24, lineHeight: 1, cursor: 'pointer', padding: '4px 10px', borderRadius: 'var(--radius-pill)', transition: 'background 0.15s', flexShrink: 0 };
+const bodyStyle: CSSProperties = { flex: 1, overflowY: 'auto', padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 14 };
+const mutedStyle: CSSProperties = { color: 'var(--ink-3)', fontSize: 13, textAlign: 'center', padding: '32px 0' };
+const errorStyle: CSSProperties = { color: 'var(--brand-pink)', fontSize: 13, padding: '10px 14px', border: '0.5px solid rgba(233, 78, 119, 0.3)', background: 'rgba(233, 78, 119, 0.08)', borderRadius: 'var(--radius-sm)' };
+const setBlockStyle: CSSProperties = { background: 'var(--bg-surface)', border: '0.5px solid var(--border-soft)', borderRadius: 'var(--radius-md)', padding: 14, boxShadow: 'var(--shadow-sm)' };
+const setHeaderStyle: CSSProperties = { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', paddingBottom: 8, marginBottom: 8, borderBottom: '0.5px solid var(--border-soft)' };
+const setNameStyle: CSSProperties = { fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, color: 'var(--ink-1)', letterSpacing: '-0.005em' };
+const setCountStyle: CSSProperties = { fontSize: 11, color: 'var(--ink-3)' };
+const songRowStyle: CSSProperties = { padding: '10px 0', borderBottom: '0.5px solid var(--border-soft)', display: 'flex', flexDirection: 'column', gap: 8 };
+const songMetaStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 10 };
+const songIndexStyle: CSSProperties = { color: 'var(--ink-4)', fontSize: 12, fontWeight: 500, width: 20, textAlign: 'right', flexShrink: 0 };
+const songTitleStyle: CSSProperties = { color: 'var(--ink-1)', fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
+const songArtistStyle: CSSProperties = { color: 'var(--ink-3)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
+const ratingsRowStyle: CSSProperties = { display: 'flex', flexWrap: 'wrap', gap: 18, paddingLeft: 30 };
+const ratingBarStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4 };
+const ratingLabelStyle: CSSProperties = { fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)' };
+const ratingDotsStyle: CSSProperties = { display: 'flex', gap: 5 };
+const ratingDotBase: CSSProperties = { width: 16, height: 16, borderRadius: '50%', border: '1px solid transparent', cursor: 'pointer', padding: 0, transition: 'transform 0.1s, background 0.15s' };
+const ratingDotEmptyStyle: CSSProperties = { ...ratingDotBase, background: 'var(--bg-surface)', border: '1px solid var(--border-medium)' };
+const overallBlockStyle: CSSProperties = { background: 'var(--bg-surface)', border: '0.5px solid var(--border-soft)', borderRadius: 'var(--radius-md)', padding: 16, display: 'flex', flexDirection: 'column', gap: 16, boxShadow: 'var(--shadow-sm)' };
+const overallLabelStyle: CSSProperties = { fontSize: 12, fontWeight: 500, color: 'var(--ink-2)', marginBottom: 8 };
+const overallRowStyle: CSSProperties = { display: 'flex', gap: 6, flexWrap: 'wrap' };
+const scoreButtonStyle: CSSProperties = { background: 'var(--bg-surface)', color: 'var(--ink-2)', border: '0.5px solid var(--border-medium)', padding: '8px 14px', fontSize: 13, fontWeight: 500, cursor: 'pointer', borderRadius: 'var(--radius-pill)', minWidth: 42, transition: 'background 0.15s' };
+const scoreButtonActiveStyle: CSSProperties = { ...scoreButtonStyle, background: 'var(--brand-yellow)', color: '#fff', borderColor: 'var(--brand-yellow)', fontWeight: 700 };
+const choiceButtonStyle: CSSProperties = { background: 'var(--bg-surface)', color: 'var(--ink-2)', border: '0.5px solid var(--border-medium)', padding: '8px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer', borderRadius: 'var(--radius-pill)', transition: 'background 0.15s' };
+const choiceButtonActiveStyle: CSSProperties = { ...choiceButtonStyle, background: 'var(--brand-teal)', color: '#fff', borderColor: 'var(--brand-teal)', fontWeight: 600 };
+const notesStyle: CSSProperties = { width: '100%', background: 'var(--bg-surface)', color: 'var(--ink-1)', border: '0.5px solid var(--border-medium)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', fontSize: 13, resize: 'vertical', minHeight: 72, outline: 'none', lineHeight: 1.5 };
+const footerStyle: CSSProperties = { display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 24px', borderTop: '0.5px solid var(--border-soft)', background: 'var(--bg-surface)' };
+const ghostButtonStyle: CSSProperties = { background: 'var(--bg-surface)', color: 'var(--ink-2)', border: '0.5px solid var(--border-medium)', borderRadius: 'var(--radius-pill)', padding: '9px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'background 0.15s' };
+const primaryButtonStyle: CSSProperties = { background: 'var(--brand-pink)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', padding: '9px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'filter 0.15s' };
+const primaryButtonDisabledStyle: CSSProperties = { ...primaryButtonStyle, background: 'var(--ink-4)', cursor: 'default' };
