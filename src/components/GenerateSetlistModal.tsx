@@ -2,29 +2,14 @@
 
 /**
  * GenerateSetlistModal — opens from the dashboard's GENERATE button.
- *
- * Loads crowd models + song_attributes from Supabase, runs the generator
- * on the available songs, presents N candidate variants in tabs. On accept,
- * replaces the gig's existing setlists with the chosen variant.
- *
- * Dark theme to match the rest of the dashboard. Body-scroll prevented
- * while the modal is open.
  */
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { v4 as uuid } from 'uuid';
 import type { CrowdModel, Song, SongAttributes } from '@/types';
 import { SONGS, formatDuration } from '@/data/songs';
-import {
-  getCrowdModels,
-  getSongAttributes,
-  getCustomSongs,
-  replaceSetlistsForGig,
-} from '@/lib/supabase';
-import {
-  generateSetlist,
-  type GeneratedCandidate,
-} from '@/lib/setGenerator';
+import { getCrowdModels, getSongAttributes, getCustomSongs, replaceSetlistsForGig } from '@/lib/supabase';
+import { generateSetlist, type GeneratedCandidate } from '@/lib/setGenerator';
 
 interface Props {
   gigId: string;
@@ -43,14 +28,12 @@ export default function GenerateSetlistModal({ gigId, gigName, onClose, onApplie
   const [variantIndex, setVariantIndex] = useState(0);
   const [applying, setApplying] = useState(false);
 
-  // Prevent body scroll while open.
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prev; };
   }, []);
 
-  // Load everything in parallel.
   useEffect(() => {
     let cancelled = false;
     Promise.all([getCrowdModels(), getSongAttributes(), getCustomSongs()])
@@ -59,15 +42,9 @@ export default function GenerateSetlistModal({ gigId, gigName, onClose, onApplie
         const m = (modelsData ?? []) as CrowdModel[];
         setModels(m);
         if (m.length > 0) setSelectedModelId(m[0].id);
-
-        // Build attrs lookup.
         const map = new Map<string, SongAttributes>();
-        for (const row of (attrsData ?? []) as SongAttributes[]) {
-          map.set(row.song_id, row);
-        }
+        for (const row of (attrsData ?? []) as SongAttributes[]) map.set(row.song_id, row);
         setAttrsById(map);
-
-        // Merge base + custom songs.
         const mappedCustom: Song[] = ((customData ?? []) as Array<Record<string, unknown>>).map((s) => ({
           id: `custom-${s.id as string}`,
           title: s.title as string,
@@ -81,25 +58,17 @@ export default function GenerateSetlistModal({ gigId, gigName, onClose, onApplie
         }));
         setSongs([...SONGS, ...mappedCustom]);
       })
-      .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load generator data');
-      })
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load generator data'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
   const selectedModel = models.find((m) => m.id === selectedModelId) ?? null;
-
   const candidates = useMemo<GeneratedCandidate[]>(() => {
     if (!selectedModel || songs.length === 0) return [];
-    try {
-      return generateSetlist(selectedModel, songs, attrsById, { variants: 3 });
-    } catch (e) {
-      console.error('Generator error', e);
-      return [];
-    }
+    try { return generateSetlist(selectedModel, songs, attrsById, { variants: 3 }); }
+    catch (e) { console.error('Generator error', e); return []; }
   }, [selectedModel, songs, attrsById]);
-
   const current = candidates[variantIndex] ?? null;
 
   const handleApply = async () => {
@@ -108,11 +77,7 @@ export default function GenerateSetlistModal({ gigId, gigName, onClose, onApplie
     try {
       const setsToSave = current.sets.map((s, i) => ({
         name: `Set ${i + 1}`,
-        songs: s.songs.map((p, j) => ({
-          instanceId: uuid(),
-          songId: p.song.id,
-          position: j,
-        })),
+        songs: s.songs.map((p, j) => ({ instanceId: uuid(), songId: p.song.id, position: j })),
       }));
       await replaceSetlistsForGig(gigId, setsToSave);
       onApplied();
@@ -120,92 +85,62 @@ export default function GenerateSetlistModal({ gigId, gigName, onClose, onApplie
     } catch (e) {
       console.error(e);
       setError(e instanceof Error ? e.message : 'Failed to apply setlists');
-    } finally {
-      setApplying(false);
-    }
+    } finally { setApplying(false); }
   };
 
   return (
     <div style={backdropStyle} onClick={onClose}>
-      <div
-        style={modalStyle}
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label="Generate setlist"
-      >
-        {/* Header */}
+      <div style={modalStyle} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Generate setlist">
         <div style={headerStyle}>
           <div>
-            <div style={eyebrowStyle}>Generate setlist</div>
+            <div className="label-eyebrow" style={{ marginBottom: 4 }}>Generate setlist</div>
             <h2 style={titleStyle}>{gigName}</h2>
+            <p style={subtitleStyle}>Pick a crowd model, then choose from three generated variants. Apply to replace this gig&apos;s sets.</p>
           </div>
-          <button onClick={onClose} aria-label="Close" style={closeButtonStyle}>×</button>
+          <button onClick={onClose} aria-label="Close" style={closeButtonStyle}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>×</button>
         </div>
 
-        {/* Model picker */}
         <div style={pickerRowStyle}>
-          <span style={labelStyle}>Crowd model</span>
-          <select
-            value={selectedModelId ?? ''}
-            onChange={(e) => { setSelectedModelId(e.target.value); setVariantIndex(0); }}
-            style={selectStyle}
-            disabled={loading || models.length === 0}
-          >
+          <span style={pickerLabelStyle}>Crowd model</span>
+          <select value={selectedModelId ?? ''} onChange={(e) => { setSelectedModelId(e.target.value); setVariantIndex(0); }} style={selectStyle} disabled={loading || models.length === 0}>
             {models.length === 0 && <option value="">No models loaded</option>}
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>{m.name}</option>
-            ))}
+            {models.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
           </select>
         </div>
 
-        {/* Body */}
         <div style={bodyStyle}>
           {loading && <div style={mutedStyle}>Loading library, attributes, and crowd models…</div>}
           {!loading && error && <div style={errorStyle}>{error}</div>}
-          {!loading && !error && !current && (
-            <div style={mutedStyle}>No variants generated. Check that song_attributes is seeded.</div>
-          )}
+          {!loading && !error && !current && <div style={mutedStyle}>No variants generated. Check that song_attributes is seeded.</div>}
 
           {current && (
             <>
-              {/* Variant tabs */}
               <div style={tabsRowStyle}>
                 {candidates.map((c, i) => (
-                  <button
-                    key={c.variant_name}
-                    onClick={() => setVariantIndex(i)}
-                    style={i === variantIndex ? tabActiveStyle : tabStyle}
-                  >
-                    {c.variant_name}
-                  </button>
+                  <button key={c.variant_name} onClick={() => setVariantIndex(i)} style={i === variantIndex ? tabActiveStyle : tabStyle}>{c.variant_name}</button>
                 ))}
               </div>
 
-              {/* Metrics strip */}
               <div style={metricsRowStyle}>
                 <Metric label="Singalong" value={String(current.metrics.total_singalong)} />
                 <Metric label="Avg dance pull" value={current.metrics.avg_dance_pull.toFixed(2)} />
-                <Metric
-                  label="Bar pull"
-                  value={`${current.metrics.bar_pull_total} ${current.metrics.bar_pull_total < 0 ? '(floor)' : '(bar)'}`}
-                />
+                <Metric label="Bar pull" value={`${current.metrics.bar_pull_total} ${current.metrics.bar_pull_total < 0 ? '(floor)' : '(bar)'}`} />
                 <Metric label="Lifeline density" value={current.metrics.lifeline_density.toFixed(2)} />
               </div>
 
-              {/* Sets */}
               <div style={setsScrollStyle}>
                 {current.sets.map((set) => (
                   <div key={set.set_index} style={setBlockStyle}>
                     <div style={setHeaderStyle}>
-                      <span style={setNameStyle}>SET {set.set_index + 1} — {set.phase_name}</span>
-                      <span style={setMetaStyle}>
-                        target {set.target_duration_minutes}m · est {set.actual_duration_minutes}m
-                      </span>
+                      <span style={setNameStyle}>Set {set.set_index + 1} · {set.phase_name}</span>
+                      <span style={setMetaStyle}>target {set.target_duration_minutes}m · est {set.actual_duration_minutes}m</span>
                     </div>
                     <ol style={songListStyle}>
                       {set.songs.map((p, i) => (
                         <li key={p.song_id + '-' + i} style={songRowStyle}>
-                          <span style={songIndexStyle}>{i + 1}.</span>
+                          <span style={songIndexStyle}>{i + 1}</span>
                           <span style={songTitleStyle}>{p.song.title}</span>
                           <span style={songArtistStyle}>{p.song.artist}</span>
                           <span style={songRoleStyle}>{p.role}</span>
@@ -217,14 +152,11 @@ export default function GenerateSetlistModal({ gigId, gigName, onClose, onApplie
                 ))}
               </div>
 
-              {/* Reasoning footnotes */}
               {current.reasoning.length > 0 && (
                 <details style={reasoningStyle}>
                   <summary style={reasoningSummaryStyle}>Why this variant ({current.reasoning.length} notes)</summary>
                   <ul style={reasoningListStyle}>
-                    {current.reasoning.map((r, i) => (
-                      <li key={i} style={reasoningItemStyle}>{r}</li>
-                    ))}
+                    {current.reasoning.map((r, i) => (<li key={i} style={reasoningItemStyle}>{r}</li>))}
                   </ul>
                 </details>
               )}
@@ -232,16 +164,13 @@ export default function GenerateSetlistModal({ gigId, gigName, onClose, onApplie
           )}
         </div>
 
-        {/* Footer */}
         <div style={footerStyle}>
-          <button onClick={onClose} style={ghostButtonStyle}>Cancel</button>
-          <button
-            onClick={handleApply}
-            disabled={!current || applying}
-            style={current && !applying ? primaryButtonStyle : primaryButtonDisabledStyle}
-          >
-            {applying ? 'Applying…' : 'Use this variant'}
-          </button>
+          <button onClick={onClose} style={ghostButtonStyle}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-surface)')}>Cancel</button>
+          <button onClick={handleApply} disabled={!current || applying} style={current && !applying ? primaryButtonStyle : primaryButtonDisabledStyle}
+            onMouseEnter={e => { if (current && !applying) e.currentTarget.style.filter = 'brightness(0.96)'; }}
+            onMouseLeave={e => (e.currentTarget.style.filter = 'brightness(1)')}>{applying ? 'Applying…' : 'Use this variant'}</button>
         </div>
       </div>
     </div>
@@ -249,219 +178,46 @@ export default function GenerateSetlistModal({ gigId, gigName, onClose, onApplie
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={metricStyle}>
-      <span style={metricLabelStyle}>{label}</span>
-      <span style={metricValueStyle}>{value}</span>
-    </div>
-  );
+  return (<div style={metricStyle}><span style={metricLabelStyle}>{label}</span><span style={metricValueStyle}>{value}</span></div>);
 }
 
-// ── styles ────────────────────────────────────────────────────────────────────
-
-const backdropStyle: CSSProperties = {
-  position: 'fixed', inset: 0, zIndex: 10_000,
-  background: 'rgba(0,0,0,0.72)',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  padding: 16,
-  fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, sans-serif',
-};
-
-const modalStyle: CSSProperties = {
-  background: '#0F0F11',
-  border: '1px solid #1f1f24',
-  borderRadius: 12,
-  width: 'min(960px, 100%)',
-  maxHeight: 'calc(100vh - 32px)',
-  display: 'flex',
-  flexDirection: 'column',
-  color: '#F5F2EE',
-  overflow: 'hidden',
-};
-
-const headerStyle: CSSProperties = {
-  display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-  padding: '20px 24px 16px',
-  borderBottom: '0.5px solid #1f1f24',
-};
-
-const eyebrowStyle: CSSProperties = {
-  fontSize: 10, fontWeight: 500, letterSpacing: '0.2em', textTransform: 'uppercase',
-  color: 'rgba(245,242,238,0.45)',
-};
-
-const titleStyle: CSSProperties = {
-  fontSize: 22, fontWeight: 500, margin: '6px 0 0',
-  letterSpacing: '-0.018em',
-};
-
-const closeButtonStyle: CSSProperties = {
-  background: 'none', border: 'none', color: 'rgba(245,242,238,0.55)',
-  fontSize: 28, lineHeight: 1, cursor: 'pointer', padding: '0 6px',
-};
-
-const pickerRowStyle: CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 12,
-  padding: '12px 24px',
-  borderBottom: '0.5px solid #1f1f24',
-};
-
-const labelStyle: CSSProperties = {
-  fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase',
-  color: 'rgba(245,242,238,0.5)',
-};
-
-const selectStyle: CSSProperties = {
-  background: '#16161a', color: '#F5F2EE',
-  border: '0.5px solid #2a2a32', borderRadius: 6,
-  padding: '6px 10px', fontSize: 12,
-  fontFamily: 'inherit',
-};
-
-const bodyStyle: CSSProperties = {
-  flex: 1, overflowY: 'auto', padding: '16px 24px',
-  display: 'flex', flexDirection: 'column', gap: 14,
-};
-
-const mutedStyle: CSSProperties = {
-  color: 'rgba(245,242,238,0.4)', fontSize: 12,
-  textAlign: 'center', padding: '24px 0',
-};
-
-const errorStyle: CSSProperties = {
-  color: '#ff6b6b', fontSize: 12, padding: 12,
-  border: '0.5px solid rgba(255,107,107,0.3)', borderRadius: 6,
-  background: 'rgba(255,107,107,0.05)',
-};
-
-const tabsRowStyle: CSSProperties = {
-  display: 'flex', gap: 4, borderBottom: '0.5px solid #1f1f24', paddingBottom: 8,
-};
-
-const tabBase: CSSProperties = {
-  background: 'none', border: 'none', cursor: 'pointer',
-  padding: '6px 12px', fontSize: 12, letterSpacing: '0.04em',
-  borderRadius: 6, fontFamily: 'inherit',
-};
-
-const tabStyle: CSSProperties = { ...tabBase, color: 'rgba(245,242,238,0.55)' };
-const tabActiveStyle: CSSProperties = {
-  ...tabBase, color: '#F5F2EE', background: '#1f1f24', border: '0.5px solid #2a2a32',
-};
-
-const metricsRowStyle: CSSProperties = {
-  display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
-  gap: 8, padding: '8px 0',
-};
-
-const metricStyle: CSSProperties = {
-  display: 'flex', flexDirection: 'column', gap: 4,
-  padding: '8px 10px', border: '0.5px solid #1f1f24', borderRadius: 6,
-};
-
-const metricLabelStyle: CSSProperties = {
-  fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase',
-  color: 'rgba(245,242,238,0.4)',
-};
-
-const metricValueStyle: CSSProperties = {
-  fontSize: 14, fontWeight: 500, color: '#F5F2EE',
-};
-
-const setsScrollStyle: CSSProperties = {
-  display: 'flex', flexDirection: 'column', gap: 14,
-};
-
-const setBlockStyle: CSSProperties = {
-  border: '0.5px solid #1f1f24', borderRadius: 8, padding: 14,
-};
-
-const setHeaderStyle: CSSProperties = {
-  display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
-  paddingBottom: 8, marginBottom: 6, borderBottom: '0.5px solid #1f1f24',
-};
-
-const setNameStyle: CSSProperties = {
-  fontSize: 12, fontWeight: 500, letterSpacing: '0.14em', textTransform: 'uppercase',
-};
-
-const setMetaStyle: CSSProperties = {
-  fontSize: 11, color: 'rgba(245,242,238,0.45)',
-  fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
-};
-
-const songListStyle: CSSProperties = {
-  listStyle: 'none', padding: 0, margin: 0,
-  display: 'flex', flexDirection: 'column', gap: 0,
-};
-
-const songRowStyle: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '24px 1fr 1fr 80px 44px',
-  gap: 8, padding: '5px 0', alignItems: 'baseline',
-  borderBottom: '1px solid rgba(255,255,255,0.04)',
-  fontSize: 12,
-};
-
-const songIndexStyle: CSSProperties = {
-  color: 'rgba(245,242,238,0.4)',
-  fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
-};
-
-const songTitleStyle: CSSProperties = { color: '#F5F2EE' };
-const songArtistStyle: CSSProperties = { color: 'rgba(245,242,238,0.55)' };
-
-const songRoleStyle: CSSProperties = {
-  fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
-  color: 'rgba(245,242,238,0.4)',
-  fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
-};
-
-const songDurationStyle: CSSProperties = {
-  color: 'rgba(245,242,238,0.45)',
-  fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
-  textAlign: 'right',
-};
-
-const reasoningStyle: CSSProperties = {
-  border: '0.5px solid #1f1f24', borderRadius: 6, padding: 10,
-};
-
-const reasoningSummaryStyle: CSSProperties = {
-  cursor: 'pointer', fontSize: 11, letterSpacing: '0.08em',
-  color: 'rgba(245,242,238,0.55)',
-};
-
-const reasoningListStyle: CSSProperties = {
-  margin: '8px 0 0', paddingLeft: 18,
-  display: 'flex', flexDirection: 'column', gap: 4,
-};
-
-const reasoningItemStyle: CSSProperties = {
-  fontSize: 11, color: 'rgba(245,242,238,0.65)', lineHeight: 1.4,
-};
-
-const footerStyle: CSSProperties = {
-  display: 'flex', justifyContent: 'flex-end', gap: 8,
-  padding: '14px 24px',
-  borderTop: '0.5px solid #1f1f24',
-};
-
-const ghostButtonStyle: CSSProperties = {
-  background: 'transparent', color: 'rgba(245,242,238,0.7)',
-  border: '0.5px solid #2a2a32', padding: '8px 16px',
-  fontSize: 12, cursor: 'pointer', borderRadius: 6,
-  fontFamily: 'inherit',
-};
-
-const primaryButtonStyle: CSSProperties = {
-  background: '#ff3d6e', color: '#0F0F11', border: 'none',
-  padding: '8px 18px', fontSize: 12, fontWeight: 600,
-  letterSpacing: '0.06em', cursor: 'pointer', borderRadius: 6,
-  fontFamily: 'inherit',
-};
-
-const primaryButtonDisabledStyle: CSSProperties = {
-  ...primaryButtonStyle,
-  background: 'rgba(255,61,110,0.3)', cursor: 'default',
-};
+const backdropStyle: CSSProperties = { position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(26, 26, 26, 0.42)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, fontFamily: 'var(--font-body)' };
+const modalStyle: CSSProperties = { background: 'var(--bg-elevated)', border: '0.5px solid var(--border-soft)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-lg)', width: 'min(960px, 100%)', maxHeight: 'calc(100vh - 32px)', display: 'flex', flexDirection: 'column', color: 'var(--ink-1)', overflow: 'hidden' };
+const headerStyle: CSSProperties = { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, padding: '20px 24px 16px', borderBottom: '0.5px solid var(--border-soft)' };
+const titleStyle: CSSProperties = { fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, margin: '2px 0 0', color: 'var(--ink-1)', letterSpacing: '-0.01em' };
+const subtitleStyle: CSSProperties = { fontSize: 13, color: 'var(--ink-3)', margin: '6px 0 0', lineHeight: 1.5, maxWidth: 540 };
+const closeButtonStyle: CSSProperties = { background: 'transparent', border: 'none', color: 'var(--ink-3)', fontSize: 24, lineHeight: 1, cursor: 'pointer', padding: '4px 10px', borderRadius: 'var(--radius-pill)', transition: 'background 0.15s', flexShrink: 0 };
+const pickerRowStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, padding: '14px 24px', borderBottom: '0.5px solid var(--border-soft)', background: 'var(--bg-subtle)' };
+const pickerLabelStyle: CSSProperties = { fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)' };
+const selectStyle: CSSProperties = { background: 'var(--bg-surface)', color: 'var(--ink-1)', border: '0.5px solid var(--border-medium)', borderRadius: 'var(--radius-sm)', padding: '7px 12px', fontSize: 13, flex: 1, outline: 'none' };
+const bodyStyle: CSSProperties = { flex: 1, overflowY: 'auto', padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 16 };
+const mutedStyle: CSSProperties = { color: 'var(--ink-3)', fontSize: 13, textAlign: 'center', padding: '32px 0' };
+const errorStyle: CSSProperties = { color: 'var(--brand-pink)', fontSize: 13, padding: '10px 14px', border: '0.5px solid rgba(233, 78, 119, 0.3)', background: 'rgba(233, 78, 119, 0.08)', borderRadius: 'var(--radius-sm)' };
+const tabsRowStyle: CSSProperties = { display: 'flex', gap: 6, borderBottom: '0.5px solid var(--border-soft)', paddingBottom: 10 };
+const tabBase: CSSProperties = { background: 'transparent', border: '0.5px solid transparent', cursor: 'pointer', padding: '6px 14px', fontSize: 12, fontWeight: 500, borderRadius: 'var(--radius-pill)', transition: 'background 0.15s, color 0.15s, border-color 0.15s' };
+const tabStyle: CSSProperties = { ...tabBase, color: 'var(--ink-3)' };
+const tabActiveStyle: CSSProperties = { ...tabBase, color: 'var(--ink-1)', background: 'var(--bg-subtle)', border: '0.5px solid var(--border-medium)', fontWeight: 600 };
+const metricsRowStyle: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 };
+const metricStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 12px', background: 'var(--bg-subtle)', border: '0.5px solid var(--border-soft)', borderRadius: 'var(--radius-md)' };
+const metricLabelStyle: CSSProperties = { fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-3)' };
+const metricValueStyle: CSSProperties = { fontSize: 15, fontWeight: 600, color: 'var(--ink-1)' };
+const setsScrollStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 12 };
+const setBlockStyle: CSSProperties = { background: 'var(--bg-surface)', border: '0.5px solid var(--border-soft)', borderRadius: 'var(--radius-md)', padding: 14, boxShadow: 'var(--shadow-sm)' };
+const setHeaderStyle: CSSProperties = { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', paddingBottom: 8, marginBottom: 8, borderBottom: '0.5px solid var(--border-soft)' };
+const setNameStyle: CSSProperties = { fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 600, color: 'var(--ink-1)', letterSpacing: '-0.005em' };
+const setMetaStyle: CSSProperties = { fontSize: 11, color: 'var(--ink-3)' };
+const songListStyle: CSSProperties = { listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 0 };
+const songRowStyle: CSSProperties = { display: 'grid', gridTemplateColumns: '24px 1.4fr 1fr 90px 50px', gap: 10, padding: '7px 0', alignItems: 'baseline', borderBottom: '0.5px solid var(--border-soft)', fontSize: 13 };
+const songIndexStyle: CSSProperties = { color: 'var(--ink-4)', fontSize: 12, fontWeight: 500, textAlign: 'right' };
+const songTitleStyle: CSSProperties = { color: 'var(--ink-1)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
+const songArtistStyle: CSSProperties = { color: 'var(--ink-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
+const songRoleStyle: CSSProperties = { fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)', background: 'var(--bg-subtle)', border: '0.5px solid var(--border-soft)', borderRadius: 'var(--radius-pill)', padding: '2px 8px', textAlign: 'center', justifySelf: 'start' };
+const songDurationStyle: CSSProperties = { color: 'var(--ink-3)', fontSize: 12, textAlign: 'right' };
+const reasoningStyle: CSSProperties = { background: 'var(--bg-subtle)', border: '0.5px solid var(--border-soft)', borderRadius: 'var(--radius-md)', padding: '10px 14px' };
+const reasoningSummaryStyle: CSSProperties = { cursor: 'pointer', fontSize: 12, fontWeight: 500, color: 'var(--ink-2)', listStyle: 'none' };
+const reasoningListStyle: CSSProperties = { margin: '10px 0 0', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 5 };
+const reasoningItemStyle: CSSProperties = { fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.5 };
+const footerStyle: CSSProperties = { display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 24px', borderTop: '0.5px solid var(--border-soft)', background: 'var(--bg-surface)' };
+const ghostButtonStyle: CSSProperties = { background: 'var(--bg-surface)', color: 'var(--ink-2)', border: '0.5px solid var(--border-medium)', borderRadius: 'var(--radius-pill)', padding: '9px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'background 0.15s' };
+const primaryButtonStyle: CSSProperties = { background: 'var(--brand-pink)', color: '#fff', border: 'none', borderRadius: 'var(--radius-pill)', padding: '9px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'filter 0.15s' };
+const primaryButtonDisabledStyle: CSSProperties = { ...primaryButtonStyle, background: 'var(--ink-4)', cursor: 'default' };
