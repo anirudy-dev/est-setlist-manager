@@ -103,15 +103,30 @@ export async function deleteSetlist(id: string) {
   if (error) throw error;
 }
 
-// ── Custom Songs ──────────────────────────────────────────────────────────────
+// ── Songs (unified source of truth) ──────────────────────────────────────────
 
-export async function getCustomSongs() {
+import { Song } from '@/types';
+
+/** Fetch all songs from the DB — base library + custom songs added by the band. */
+export async function getSongs(): Promise<Song[]> {
   const { data, error } = await supabase
-    .from('custom_songs')
+    .from('songs')
     .select('*')
-    .order('created_at', { ascending: true });
+    .order('decade', { ascending: true })
+    .order('title', { ascending: true });
   if (error) throw error;
-  return data;
+  // Map snake_case DB columns → camelCase Song type
+  return (data ?? []).map((row) => ({
+    id:         row.id,
+    title:      row.title,
+    artist:     row.artist,
+    decade:     row.decade,
+    year:       row.year,
+    duration:   Number(row.duration),   // always an integer, but coerce for safety
+    mood:       row.mood,
+    moodColor:  row.mood_color,
+    energy:     row.energy as 'low' | 'medium' | 'high',
+  }));
 }
 
 // Converts "M:SS" or "MM:SS" string to total seconds
@@ -124,30 +139,45 @@ function parseDuration(duration: string): number {
   return minutes * 60 + seconds;
 }
 
+/** Add a custom song to the unified songs table (is_custom = TRUE). */
 export async function addCustomSong(song: {
   title: string;
   artist: string;
   decade: string;
   year: number;
-  duration: string;
+  duration: string; // "M:SS" format from the form
   mood: string;
   mood_color: string;
-}) {
+  energy?: 'low' | 'medium' | 'high';
+}): Promise<Song> {
   const { data, error } = await supabase
-    .from('custom_songs')
+    .from('songs')
     .insert([{
-      title: song.title,
-      artist: song.artist,
-      decade: song.decade,
-      year: song.year,
-      duration: parseDuration(song.duration), // ← converts "4:32" to 272
-      mood: song.mood,
+      id:         crypto.randomUUID(),
+      title:      song.title,
+      artist:     song.artist,
+      decade:     song.decade,
+      year:       song.year,
+      duration:   parseDuration(song.duration),
+      mood:       song.mood,
       mood_color: song.mood_color,
+      energy:     song.energy ?? 'medium',
+      is_custom:  true,
     }])
     .select()
     .single();
   if (error) throw error;
-  return data;
+  return {
+    id:        data.id,
+    title:     data.title,
+    artist:    data.artist,
+    decade:    data.decade,
+    year:      data.year,
+    duration:  Number(data.duration),
+    mood:      data.mood,
+    moodColor: data.mood_color,
+    energy:    data.energy,
+  };
 }
 
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
@@ -17,11 +17,11 @@ import {
 import { v4 as uuid } from 'uuid';
 
 import { Gig, Setlist, SetlistSong, Song } from '@/types';
-import { SONGS, formatDuration, formatTotalDuration } from '@/data/songs';
+import { formatDuration, formatTotalDuration } from '@/data/songs';
 import {
   getGigs, createGig, updateGig, deleteGig,
   getSetlistsForGig, createSetlist, updateSetlist, deleteSetlist,
-  getCustomSongs,
+  getSongs,
 } from '@/lib/supabase';
 import { exportSetlistPDF, exportGigPDF, printSetlist } from '@/lib/export';
 
@@ -40,7 +40,7 @@ export default function Dashboard() {
 
   const [gigs, setGigs] = useState<Gig[]>([]);
   const [setlists, setSetlists] = useState<Setlist[]>([]);
-  const [customSongs, setCustomSongs] = useState<Song[]>([]);
+  const [allSongs, setAllSongs] = useState<Song[]>([]);
   const [selectedGigId, setSelectedGigId] = useState<string | null>(null);
   const [activeSetlistId, setActiveSetlistId] = useState<string | null>(null);
   const [loadingGigs, setLoadingGigs] = useState(true);
@@ -55,7 +55,6 @@ export default function Dashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const allSongs: Song[] = useMemo(() => [...SONGS, ...customSongs], [customSongs]);
   const selectedGig = gigs.find(g => g.id === selectedGigId) ?? null;
   const gigSetlists = setlists.filter(s => s.gig_id === selectedGigId);
   const gigHasSongs = gigSetlists.some(sl => (sl.songs?.length ?? 0) > 0);
@@ -75,41 +74,19 @@ export default function Dashboard() {
 
   useEffect(() => {
     setLoadingGigs(true);
-    Promise.all([getGigs(), getCustomSongs()])
-      .then(([gigsData, customData]) => {
+    Promise.all([getGigs(), getSongs()])
+      .then(([gigsData, songsData]) => {
         setGigs(gigsData || []);
-        const mapped: Song[] = (customData || []).map((s: Record<string, unknown>) => ({
-          id: `custom-${s.id}`,
-          title: s.title as string,
-          artist: s.artist as string,
-          decade: s.decade as string,
-          year: s.year as number,
-          duration: s.duration as number,
-          mood: s.mood as string,
-          moodColor: s.mood_color as string,
-          energy: (s.energy as 'low' | 'medium' | 'high') ?? 'medium',
-        }));
-        setCustomSongs(mapped);
+        setAllSongs(songsData || []);
       })
       .catch(() => {})
       .finally(() => setLoadingGigs(false));
   }, []);
 
-  const reloadCustomSongs = useCallback(async () => {
+  const reloadSongs = useCallback(async () => {
     try {
-      const customData = await getCustomSongs();
-      const mapped: Song[] = (customData || []).map((s: Record<string, unknown>) => ({
-        id: `custom-${s.id}`,
-        title: s.title as string,
-        artist: s.artist as string,
-        decade: s.decade as string,
-        year: s.year as number,
-        duration: s.duration as number,
-        mood: s.mood as string,
-        moodColor: s.mood_color as string,
-        energy: (s.energy as 'low' | 'medium' | 'high') ?? 'medium',
-      }));
-      setCustomSongs(mapped);
+      const songsData = await getSongs();
+      setAllSongs(songsData || []);
     } catch { /* silent */ }
   }, []);
 
@@ -533,7 +510,7 @@ export default function Dashboard() {
         <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: 'var(--ink-1)', color: '#fff', padding: '10px 18px', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 500, boxShadow: 'var(--shadow-lg)', zIndex: 9999, whiteSpace: 'nowrap' }}>{toast}</div>
       )}
 
-      {showAddSong && <AddSongModal onClose={() => setShowAddSong(false)} onAdded={reloadCustomSongs} />}
+      {showAddSong && <AddSongModal onClose={() => setShowAddSong(false)} onAdded={reloadSongs} />}
       {showGenerate && selectedGigId && <GenerateSetlistModal gigId={selectedGigId} gigName={selectedGig?.name ?? 'Gig'} onClose={() => setShowGenerate(false)} onApplied={() => { reloadSetlists(); showToast('Setlist generated'); }} />}
       {showDebrief && selectedGigId && <DebriefModal gigId={selectedGigId} gigName={selectedGig?.name ?? 'Gig'} onClose={() => setShowDebrief(false)} onSaved={() => showToast('Debrief saved — generator will learn from this')} />}
       {showScout && selectedGigId && selectedGig && <VenueScoutModal venueName={selectedGig.venue || selectedGig.name || 'Venue'} city="" onClose={() => setShowScout(false)} onSaved={() => showToast('Venue profile saved — generator will use it')} />}
