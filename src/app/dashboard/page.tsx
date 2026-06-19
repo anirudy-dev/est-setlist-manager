@@ -476,7 +476,7 @@ export default function Dashboard() {
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-app)', color: 'var(--ink-1)' }}>
         <nav style={{ height: 60, borderBottom: '0.5px solid var(--border-soft)', background: 'var(--bg-app)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <Image src="/est_logo_cropped.png" alt="Every Second Tuesday" width={160} height={40} style={{ height: 32, width: 'auto' }} />
+            <Image src="/logo.png" alt="Every Second Tuesday" width={160} height={40} style={{ height: 32, width: 'auto' }} />
             <span className="label-eyebrow" style={{ marginLeft: 4 }}>Gigs</span>
           </div>
           <div ref={menuRef} style={{ position: 'relative' }}>
