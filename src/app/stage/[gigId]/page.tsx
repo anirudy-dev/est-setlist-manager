@@ -36,11 +36,11 @@ import {
   formatKey,
   formatSetLabel,
 } from '@/types';
-import { SONGS, formatDuration } from '@/data/songs';
+import { formatDuration } from '@/data/songs';
 import {
   getGigs,
   getSetlistsForGig,
-  getCustomSongs,
+  getSongs,
   getSongAttributes,
 } from '@/lib/supabase';
 
@@ -90,7 +90,7 @@ export default function StagePage() {
 
   const [gig, setGig] = useState<Gig | null>(null);
   const [setlists, setSetlists] = useState<Setlist[]>([]);
-  const [customSongs, setCustomSongs] = useState<Song[]>([]);
+  const [allSongs, setAllSongs] = useState<Song[]>([]);
   const [attrsById, setAttrsById] = useState<Map<string, SongAttributes>>(new Map());
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -112,10 +112,10 @@ export default function StagePage() {
     Promise.all([
       getGigs(),
       getSetlistsForGig(gigId),
-      getCustomSongs(),
+      getSongs(),
       getSongAttributes().catch(() => []),
     ])
-      .then(([gigsData, setlistsData, customSongsData, attrsData]) => {
+      .then(([gigsData, setlistsData, songsData, attrsData]) => {
         if (cancelled) return;
         const foundGig = (gigsData as Gig[] | null)?.find((g) => g.id === gigId) ?? null;
         if (!foundGig) { setErrorMsg('Gig not found'); return; }
@@ -126,19 +126,7 @@ export default function StagePage() {
           songs: (Array.isArray(s.songs) ? s.songs : JSON.parse((s.songs as string) || '[]')) as Setlist['songs'],
         }));
         setSetlists(parsedSetlists);
-
-        const mappedCustom: Song[] = ((customSongsData as Array<Record<string, unknown>>) ?? []).map((s) => ({
-          id: `custom-${s.id as string}`,
-          title: s.title as string,
-          artist: s.artist as string,
-          decade: s.decade as string,
-          year: s.year as number,
-          duration: s.duration as number,
-          mood: s.mood as string,
-          moodColor: s.mood_color as string,
-          energy: (s.energy as 'low' | 'medium' | 'high' | undefined) ?? 'medium',
-        }));
-        setCustomSongs(mappedCustom);
+        setAllSongs(songsData ?? []);
 
         const map = new Map<string, SongAttributes>();
         for (const row of ((attrsData ?? []) as SongAttributes[])) {
@@ -152,7 +140,6 @@ export default function StagePage() {
     return () => { cancelled = true; };
   }, [gigId]);
 
-  const allSongs = useMemo(() => [...SONGS, ...customSongs], [customSongs]);
 
   // Flat positions with mini-set bookkeeping.
   const positions: StagePosition[] = useMemo(() => {

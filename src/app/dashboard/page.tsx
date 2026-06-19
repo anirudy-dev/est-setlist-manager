@@ -467,7 +467,7 @@ export default function Dashboard() {
 
         <div className="hidden md:flex" style={{ flex: 1, minHeight: 0, gap: 12, padding: 12 }}>
           <div style={{ width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--bg-surface)', borderRadius: 'var(--radius-lg)', border: '0.5px solid var(--border-soft)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
-            <MasterSongList activeSetlistId={activeSetlistId} onDoubleClickAdd={addSongToActive} customSongs={customSongs} onOpenAddSong={() => setShowAddSong(true)} />
+            <MasterSongList activeSetlistId={activeSetlistId} onDoubleClickAdd={addSongToActive} allSongs={allSongs} onOpenAddSong={() => setShowAddSong(true)} />
           </div>
           <div style={{ width: 460, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--bg-surface)', borderRadius: 'var(--radius-lg)', border: '0.5px solid var(--border-soft)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
             {SetlistsColumn}
@@ -479,7 +479,7 @@ export default function Dashboard() {
 
         <div className="flex md:hidden" style={{ flex: 1, flexDirection: 'column', minHeight: 0 }}>
           <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-            {mobileTab === 'songs' && <div style={{ height: '100%' }}><MasterSongList activeSetlistId={activeSetlistId} onDoubleClickAdd={id => { addSongToActive(id); setMobileTab('gigs'); }} customSongs={customSongs} onOpenAddSong={() => setShowAddSong(true)} /></div>}
+            {mobileTab === 'songs' && <div style={{ height: '100%' }}><MasterSongList activeSetlistId={activeSetlistId} onDoubleClickAdd={id => { addSongToActive(id); setMobileTab('gigs'); }} allSongs={allSongs} onOpenAddSong={() => setShowAddSong(true)} /></div>}
             {mobileTab === 'gigs' && <div style={{ height: '100%', overflowY: 'auto' }}>{SetlistsColumn}</div>}
             {mobileTab === 'overview' && <div style={{ height: '100%' }}>{OverviewColumn}</div>}
           </div>

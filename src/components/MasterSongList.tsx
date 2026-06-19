@@ -1,7 +1,7 @@
 'use client';
 import { useState, useMemo, type CSSProperties } from 'react';
 import { useDraggable } from '@dnd-kit/core';
-import { SONGS, formatDuration } from '@/data/songs';
+import { formatDuration, formatTotalDuration } from '@/data/songs';
 import { Song } from '@/types';
 
 function SongRow({ song, onAdd, activeSetlistId }: { song: Song; onAdd: (songId: string) => void; activeSetlistId: string | null; }) {
@@ -28,15 +28,13 @@ function SongRow({ song, onAdd, activeSetlistId }: { song: Song; onAdd: (songId:
   );
 }
 
-interface Props { activeSetlistId: string | null; onDoubleClickAdd: (songId: string) => void; customSongs?: Song[]; onOpenAddSong?: () => void; }
+interface Props { activeSetlistId: string | null; onDoubleClickAdd: (songId: string) => void; allSongs: Song[]; onOpenAddSong?: () => void; }
 
-export default function MasterSongList({ activeSetlistId, onDoubleClickAdd, customSongs = [], onOpenAddSong }: Props) {
+export default function MasterSongList({ activeSetlistId, onDoubleClickAdd, allSongs, onOpenAddSong }: Props) {
   const [search, setSearch] = useState('');
   const [selectedDecade, setSelectedDecade] = useState<string>('All');
   const [selectedMood, setSelectedMood] = useState<string>('All');
   const [sortBy, setSortBy] = useState<'title' | 'artist' | 'duration' | 'year'>('year');
-
-  const allSongs = useMemo(() => [...SONGS, ...customSongs], [customSongs]);
   const moods = useMemo(() => { const seen: Record<string, boolean> = {}; const unique: string[] = []; allSongs.forEach(s => { if (!seen[s.mood]) { seen[s.mood] = true; unique.push(s.mood); } }); return ['All', ...unique.sort()]; }, [allSongs]);
   const allDecades = useMemo(() => { const seen: Record<string, boolean> = {}; const unique: string[] = []; allSongs.forEach(s => { if (!seen[s.decade]) { seen[s.decade] = true; unique.push(s.decade); } }); return ['All', ...unique.sort()]; }, [allSongs]);
   const filtered = useMemo(() => {
@@ -91,7 +89,7 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd, cust
       </div>
       <div style={{ padding: '12px 20px', borderTop: '0.5px solid var(--border-soft)', display: 'flex', justifyContent: 'space-between', color: 'var(--ink-3)', fontSize: 12, background: 'var(--bg-surface)' }}>
         <span>{filtered.length} songs</span>
-        <span>{Math.floor(totalSecs / 60)}m {totalSecs % 60}s</span>
+        <span>{formatTotalDuration(totalSecs)}</span>
       </div>
     </div>
   );

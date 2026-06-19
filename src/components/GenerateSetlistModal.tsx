@@ -7,8 +7,8 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { v4 as uuid } from 'uuid';
 import type { CrowdModel, Song, SongAttributes } from '@/types';
-import { SONGS, formatDuration } from '@/data/songs';
-import { getCrowdModels, getSongAttributes, getCustomSongs, replaceSetlistsForGig } from '@/lib/supabase';
+import { formatDuration } from '@/data/songs';
+import { getCrowdModels, getSongAttributes, getSongs, replaceSetlistsForGig } from '@/lib/supabase';
 import { generateSetlist, type GeneratedCandidate } from '@/lib/setGenerator';
 
 interface Props {
@@ -36,8 +36,8 @@ export default function GenerateSetlistModal({ gigId, gigName, onClose, onApplie
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getCrowdModels(), getSongAttributes(), getCustomSongs()])
-      .then(([modelsData, attrsData, customData]) => {
+    Promise.all([getCrowdModels(), getSongAttributes(), getSongs()])
+      .then(([modelsData, attrsData, songsData]) => {
         if (cancelled) return;
         const m = (modelsData ?? []) as CrowdModel[];
         setModels(m);
@@ -45,18 +45,7 @@ export default function GenerateSetlistModal({ gigId, gigName, onClose, onApplie
         const map = new Map<string, SongAttributes>();
         for (const row of (attrsData ?? []) as SongAttributes[]) map.set(row.song_id, row);
         setAttrsById(map);
-        const mappedCustom: Song[] = ((customData ?? []) as Array<Record<string, unknown>>).map((s) => ({
-          id: `custom-${s.id as string}`,
-          title: s.title as string,
-          artist: s.artist as string,
-          decade: s.decade as string,
-          year: s.year as number,
-          duration: s.duration as number,
-          mood: s.mood as string,
-          moodColor: s.mood_color as string,
-          energy: (s.energy as 'low' | 'medium' | 'high' | undefined) ?? 'medium',
-        }));
-        setSongs([...SONGS, ...mappedCustom]);
+        setSongs(songsData ?? []);
       })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load generator data'); })
       .finally(() => { if (!cancelled) setLoading(false); });

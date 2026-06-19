@@ -6,8 +6,8 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type { Setlist, Song } from '@/types';
-import { SONGS, formatDuration } from '@/data/songs';
-import { getSetlistsForGig, getCustomSongs, saveGigDebrief } from '@/lib/supabase';
+import { formatDuration } from '@/data/songs';
+import { getSetlistsForGig, getSongs, saveGigDebrief } from '@/lib/supabase';
 
 interface Props {
   gigId: string;
@@ -50,27 +50,15 @@ export default function DebriefModal({ gigId, gigName, onClose, onSaved }: Props
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getSetlistsForGig(gigId), getCustomSongs()])
-      .then(([setlistsData, customData]) => {
+    Promise.all([getSetlistsForGig(gigId), getSongs()])
+      .then(([setlistsData, songsData]) => {
         if (cancelled) return;
         const parsed: Setlist[] = ((setlistsData ?? []) as Array<Record<string, unknown>>).map((s) => ({
           ...(s as unknown as Setlist),
           songs: (Array.isArray(s.songs) ? (s.songs as Setlist['songs']) : JSON.parse((s.songs as string) || '[]')) as Setlist['songs'],
         }));
         setSetlists(parsed);
-
-        const mappedCustom: Song[] = ((customData ?? []) as Array<Record<string, unknown>>).map((s) => ({
-          id: `custom-${s.id as string}`,
-          title: s.title as string,
-          artist: s.artist as string,
-          decade: s.decade as string,
-          year: s.year as number,
-          duration: s.duration as number,
-          mood: s.mood as string,
-          moodColor: s.mood_color as string,
-          energy: (s.energy as 'low' | 'medium' | 'high' | undefined) ?? 'medium',
-        }));
-        setSongs([...SONGS, ...mappedCustom]);
+        setSongs(songsData ?? []);
 
         const seed: Record<string, SongRating> = {};
         parsed.forEach((sl: Setlist, setIdx: number) => {
