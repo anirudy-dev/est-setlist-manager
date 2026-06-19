@@ -35,6 +35,7 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd, allS
   const [selectedDecade, setSelectedDecade] = useState<string>('All');
   const [selectedMood, setSelectedMood] = useState<string>('All');
   const [sortBy, setSortBy] = useState<'title' | 'artist' | 'duration' | 'year'>('year');
+
   const moods = useMemo(() => { const seen: Record<string, boolean> = {}; const unique: string[] = []; allSongs.forEach(s => { if (!seen[s.mood]) { seen[s.mood] = true; unique.push(s.mood); } }); return ['All', ...unique.sort()]; }, [allSongs]);
   const allDecades = useMemo(() => { const seen: Record<string, boolean> = {}; const unique: string[] = []; allSongs.forEach(s => { if (!seen[s.decade]) { seen[s.decade] = true; unique.push(s.decade); } }); return ['All', ...unique.sort()]; }, [allSongs]);
   const filtered = useMemo(() => {
@@ -45,7 +46,7 @@ export default function MasterSongList({ activeSetlistId, onDoubleClickAdd, allS
     list.sort((a, b) => { if (sortBy === 'title') return a.title.localeCompare(b.title); if (sortBy === 'artist') return a.artist.localeCompare(b.artist); if (sortBy === 'duration') return a.duration - b.duration; return a.year - b.year; });
     return list;
   }, [search, selectedDecade, selectedMood, sortBy, allSongs]);
-  const totalSecs = filtered.reduce((a, s) => a + s.duration, 0);
+  const totalSecs = filtered.reduce((a, s) => a + (Number(s.duration) || 0), 0);
   const grouped = useMemo(() => { const map: Record<string, Song[]> = {}; filtered.forEach(s => { if (!map[s.decade]) map[s.decade] = []; map[s.decade].push(s); }); return map; }, [filtered]);
   const decadeOrder = ['1960s', '1970s', '1980s', '1990s', '2000s', '2010s', 'Custom'];
 

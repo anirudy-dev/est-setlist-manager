@@ -1,27 +1,13 @@
 // songs.ts — utility functions only.
-// The authoritative song list now lives in Supabase (songs table, migration 007).
+// The authoritative song list lives in Supabase (songs table, migration 007).
 // Use getSongs() from @/lib/supabase to load songs at runtime.
 
 export const DECADES = ['1960s', '1970s', '1980s', '1990s', '2000s'];
 
 export const MOODS = [
-  'Anthemic',
-  'Blues Intense',
-  'Blues Rock',
-  'Dark & Groovy',
-  'Dark & Moody',
-  'Epic',
-  'Explosive',
-  'Fun',
-  'Funky',
-  'Groovy',
-  'Heavy',
-  'Mellow',
-  'Melodic',
-  'Powerful',
-  'Smooth',
-  'Southern Rock',
-  'Uplifting',
+  'Anthemic', 'Blues Intense', 'Blues Rock', 'Dark & Groovy', 'Dark & Moody',
+  'Epic', 'Explosive', 'Fun', 'Funky', 'Groovy', 'Heavy', 'Mellow',
+  'Melodic', 'Powerful', 'Smooth', 'Southern Rock', 'Uplifting',
 ];
 
 export function formatDuration(seconds: number): string {

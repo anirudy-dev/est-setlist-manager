@@ -357,7 +357,7 @@ export default function Dashboard() {
                 return (
                   <div style={{ marginTop: 16, padding: '14px 16px', background: 'var(--bg-surface)', border: '0.5px solid var(--border-soft)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                     <span className="label-eyebrow">Total gig</span>
-                    <span style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, color: 'var(--brand-pink)', letterSpacing: '-0.01em' }}>{Math.floor(total / 60)}m {total % 60}s</span>
+                    <span style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, color: 'var(--brand-pink)', letterSpacing: '-0.01em' }}>{formatTotalDuration(total)}</span>
                   </div>
                 );
               })()}
