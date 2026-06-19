@@ -422,9 +422,8 @@ export default function Dashboard() {
           ) : gigSetlists.map((sl) => {
             const setTotalSecs = sl.songs.reduce((acc, item) => {
               const s = allSongs.find(song => song.id === item.songId);
-              const dur = s?.duration ?? 0;
-              // Guard against corrupted data (duration must be a finite number ≤ 1 hour)
-              return acc + (Number.isFinite(dur) && dur > 0 && dur <= 3600 ? dur : 0);
+              const dur = Number(s?.duration) || 0;
+              return acc + (dur > 0 && dur <= 3600 ? dur : 0);
             }, 0);
             return (
               <div key={sl.id} style={{ marginBottom: 16, background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border-soft)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
@@ -455,8 +454,8 @@ export default function Dashboard() {
           {gigSetlists.length > 0 && (() => {
             const total = gigSetlists.reduce((acc, sl) => acc + sl.songs.reduce((a, item) => {
               const s = allSongs.find(song => song.id === item.songId);
-              const dur = s?.duration ?? 0;
-              return a + (Number.isFinite(dur) && dur > 0 && dur <= 3600 ? dur : 0);
+              const dur = Number(s?.duration) || 0;
+              return a + (dur > 0 && dur <= 3600 ? dur : 0);
             }, 0), 0);
             const songCount = gigSetlists.reduce((a, sl) => a + sl.songs.length, 0);
             return (

@@ -103,8 +103,8 @@ export default function SetlistPanel({
 
   const totalSecs = setlist.songs.reduce((acc, item) => {
     const s = allSongs.find(song => song.id === item.songId);
-    const dur = s?.duration ?? 0;
-    return acc + (Number.isFinite(dur) && dur > 0 && dur <= 3600 ? dur : 0);
+    const dur = Number(s?.duration) || 0;
+    return acc + (dur > 0 && dur <= 3600 ? dur : 0);
   }, 0);
 
   const submitRename = () => { if (newName.trim()) onRename(newName.trim()); setRenaming(false); };
