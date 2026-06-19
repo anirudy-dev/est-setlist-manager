@@ -12,6 +12,7 @@ export const SONGS: Song[] = [
   { id: '60-08', title: "Oh! Darling", artist: 'The Beatles', decade: '1960s', year: 1969, duration: 206, mood: 'Powerful', moodColor: '#ffaa00', energy: 'high' },
   { id: '60-09', title: "I Want You (She's So Heavy)", artist: 'The Beatles', decade: '1960s', year: 1969, duration: 467, mood: 'Heavy', moodColor: '#cc4444', energy: 'high' },
   { id: '60-10', title: 'Whipping Post', artist: 'The Allman Brothers Band', decade: '1960s', year: 1969, duration: 320, mood: 'Blues Intense', moodColor: '#4488ff', energy: 'high' },
+  { id: '60-11', title: 'Johnny B. Goode', artist: 'Chuck Berry', decade: '1960s', year: 1958, duration: 162, mood: 'Explosive', moodColor: '#ff4444', energy: 'high' },
 
   // 1970s
   { id: '70-01', title: 'Money', artist: 'Pink Floyd', decade: '1970s', year: 1973, duration: 382, mood: 'Dark & Groovy', moodColor: '#8844cc', energy: 'medium' },
@@ -45,6 +46,7 @@ export const SONGS: Song[] = [
   { id: '90-03', title: 'All the Small Things', artist: 'Blink-182', decade: '1990s', year: 1999, duration: 169, mood: 'Fun', moodColor: '#ffcc00', energy: 'high' },
   { id: '90-04', title: 'Song 2', artist: 'Blur', decade: '1990s', year: 1997, duration: 122, mood: 'Explosive', moodColor: '#ff4444', energy: 'high' },
   { id: '90-05', title: 'Californication', artist: 'Red Hot Chili Peppers', decade: '1990s', year: 1999, duration: 321, mood: 'Mellow', moodColor: '#44aa88', energy: 'low' },
+  { id: '90-06', title: 'All Star', artist: 'Smash Mouth', decade: '1990s', year: 1999, duration: 238, mood: 'Fun', moodColor: '#ffcc00', energy: 'high' },
 
   // 2000s
   { id: '00-01', title: 'Mr. Brightside', artist: 'The Killers', decade: '2000s', year: 2003, duration: 222, mood: 'Anthemic', moodColor: '#ff7700', energy: 'high' },

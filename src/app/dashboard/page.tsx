@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
@@ -8,76 +8,131 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   closestCenter,
-  DragOverEvent,
 } from '@dnd-kit/core';
-import { arrayMove } from '@dnd-kit/sortable';
 import { v4 as uuid } from 'uuid';
 
-import { Gig, Setlist, SetlistSong } from '@/types';
-import { getSongById, formatDuration } from '@/data/songs';
-import { getGigs, createGig, updateGig, deleteGig, getSetlistsForGig, createSetlist, updateSetlist, deleteSetlist } from '@/lib/supabase';
-import { exportSetlistPDF, printSetlist } from '@/lib/export';
+import { Gig, Setlist, SetlistSong, Song } from '@/types';
+import { SONGS, formatDuration, formatTotalDuration } from '@/data/songs';
+import {
+  getGigs, createGig, updateGig, deleteGig,
+  getSetlistsForGig, createSetlist, updateSetlist, deleteSetlist,
+  getCustomSongs,
+} from '@/lib/supabase';
+import { exportSetlistPDF, exportGigPDF, printSetlist } from '@/lib/export';
 
 import MasterSongList from '@/components/MasterSongList';
 import GigPanel from '@/components/GigPanel';
 import SetlistPanel from '@/components/SetlistPanel';
+import AddSongModal from '@/components/AddSongModal';
+import GenerateSetlistModal from '@/components/GenerateSetlistModal';
+import DebriefModal from '@/components/DebriefModal';
+import VenueScoutModal from '@/components/VenueScoutModal';
+
+type MobileTab = 'songs' | 'gigs' | 'overview';
 
 export default function Dashboard() {
   const router = useRouter();
+
   const [gigs, setGigs] = useState<Gig[]>([]);
   const [setlists, setSetlists] = useState<Setlist[]>([]);
+  const [customSongs, setCustomSongs] = useState<Song[]>([]);
   const [selectedGigId, setSelectedGigId] = useState<string | null>(null);
   const [activeSetlistId, setActiveSetlistId] = useState<string | null>(null);
   const [loadingGigs, setLoadingGigs] = useState(true);
   const [loadingSetlists, setLoadingSetlists] = useState(false);
   const [dragSongId, setDragSongId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [mobileTab, setMobileTab] = useState<MobileTab>('gigs');
+  const [showAddSong, setShowAddSong] = useState(false);
+  const [showGenerate, setShowGenerate] = useState(false);
+  const [showDebrief, setShowDebrief] = useState(false);
+  const [showScout, setShowScout] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
+  const allSongs: Song[] = useMemo(() => [...SONGS, ...customSongs], [customSongs]);
   const selectedGig = gigs.find(g => g.id === selectedGigId) ?? null;
   const gigSetlists = setlists.filter(s => s.gig_id === selectedGigId);
+  const gigHasSongs = gigSetlists.some(sl => (sl.songs?.length ?? 0) > 0);
 
-  // ── Auth guard ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (typeof window !== 'undefined' && !localStorage.getItem('est-auth')) {
-      router.push('/');
-    }
+    if (typeof window !== 'undefined' && !localStorage.getItem('est-auth')) router.push('/');
   }, [router]);
 
-  // ── Load gigs ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuOpen]);
+
   useEffect(() => {
     setLoadingGigs(true);
-    getGigs()
-      .then(data => { setGigs(data || []); setLoadingGigs(false); })
-      .catch(() => { setLoadingGigs(false); });
+    Promise.all([getGigs(), getCustomSongs()])
+      .then(([gigsData, customData]) => {
+        setGigs(gigsData || []);
+        const mapped: Song[] = (customData || []).map((s: Record<string, unknown>) => ({
+          id: `custom-${s.id}`,
+          title: s.title as string,
+          artist: s.artist as string,
+          decade: s.decade as string,
+          year: s.year as number,
+          duration: s.duration as number,
+          mood: s.mood as string,
+          moodColor: s.mood_color as string,
+          energy: (s.energy as 'low' | 'medium' | 'high') ?? 'medium',
+        }));
+        setCustomSongs(mapped);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingGigs(false));
   }, []);
 
-  // ── Load setlists when gig selected ───────────────────────────────────────
+  const reloadCustomSongs = useCallback(async () => {
+    try {
+      const customData = await getCustomSongs();
+      const mapped: Song[] = (customData || []).map((s: Record<string, unknown>) => ({
+        id: `custom-${s.id}`,
+        title: s.title as string,
+        artist: s.artist as string,
+        decade: s.decade as string,
+        year: s.year as number,
+        duration: s.duration as number,
+        mood: s.mood as string,
+        moodColor: s.mood_color as string,
+        energy: (s.energy as 'low' | 'medium' | 'high') ?? 'medium',
+      }));
+      setCustomSongs(mapped);
+    } catch { /* silent */ }
+  }, []);
+
   useEffect(() => {
     if (!selectedGigId) { setSetlists([]); return; }
     setLoadingSetlists(true);
     getSetlistsForGig(selectedGigId)
       .then(data => {
-        const parsed = (data || []).map((s: any) => ({
+        const parsed = (data || []).map((s: Record<string, unknown>) => ({
           ...s,
-          songs: Array.isArray(s.songs) ? s.songs : JSON.parse(s.songs || '[]'),
+          songs: Array.isArray(s.songs) ? s.songs : JSON.parse((s.songs as string) || '[]'),
         }));
-        setSetlists(parsed);
-        setLoadingSetlists(false);
+        setSetlists(parsed as Setlist[]);
       })
-      .catch(() => setLoadingSetlists(false));
+      .catch(() => {})
+      .finally(() => setLoadingSetlists(false));
   }, [selectedGigId]);
 
-  // ── Toast helper ───────────────────────────────────────────────────────────
-  const showToast = (msg: string) => {
+  const showToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
-  };
+  }, []);
 
-  // ── Gig actions ────────────────────────────────────────────────────────────
   const handleCreateGig = async (name: string, date: string, venue: string, notes: string) => {
     try {
       const gig = await createGig({ name, date, venue, notes });
@@ -104,15 +159,12 @@ export default function Dashboard() {
     } catch { showToast('Error deleting gig'); }
   };
 
-  // ── Setlist actions ────────────────────────────────────────────────────────
   const handleCreateSetlist = async () => {
     if (!selectedGigId) return;
-    const name = `Set ${gigSetlists.length + 1}`;
     try {
-      const sl = await createSetlist({ gig_id: selectedGigId, name, order_num: gigSetlists.length });
-      const parsed = { ...sl, songs: [] };
-      setSetlists(prev => [...prev, parsed]);
-      setActiveSetlistId(parsed.id);
+      const sl = await createSetlist({ gig_id: selectedGigId, name: `Set ${gigSetlists.length + 1}`, order_num: gigSetlists.length });
+      setSetlists(prev => [...prev, { ...sl, songs: [] }]);
+      setActiveSetlistId(sl.id);
       showToast('Setlist created!');
     } catch { showToast('Error creating setlist'); }
   };
@@ -121,7 +173,7 @@ export default function Dashboard() {
     try {
       await updateSetlist(id, { name });
       setSetlists(prev => prev.map(s => s.id === id ? { ...s, name } : s));
-    } catch { showToast('Error renaming setlist'); }
+    } catch { showToast('Error renaming'); }
   };
 
   const handleDeleteSetlist = async (id: string) => {
@@ -130,37 +182,60 @@ export default function Dashboard() {
       setSetlists(prev => prev.filter(s => s.id !== id));
       if (activeSetlistId === id) setActiveSetlistId(null);
       showToast('Setlist deleted');
-    } catch { showToast('Error deleting setlist'); }
+    } catch { showToast('Error deleting'); }
   };
 
-  // ── Update songs in setlist (optimistic + persist) ─────────────────────────
-  const updateSetlistSongs = useCallback(async (setlistId: string, songs: SetlistSong[]) => {
-    setSetlists(prev => prev.map(s => s.id === setlistId ? { ...s, songs } : s));
-    try {
-      await updateSetlist(setlistId, { songs: songs as unknown[] });
-    } catch { showToast('Error saving'); }
-  }, []);
-
-  // ── Add song to active setlist ─────────────────────────────────────────────
   const addSongToActive = useCallback((songId: string) => {
     if (!activeSetlistId) return;
-    const current = setlists.find(s => s.id === activeSetlistId);
-    if (!current) return;
-    const newItem: SetlistSong = { instanceId: uuid(), songId, position: current.songs.length };
-    updateSetlistSongs(activeSetlistId, [...current.songs, newItem]);
+    setSetlists(prev => {
+      const sl = prev.find(s => s.id === activeSetlistId);
+      if (!sl) return prev;
+      const newItem: SetlistSong = { instanceId: uuid(), songId, position: sl.songs.length };
+      const updated = [...sl.songs, newItem];
+      updateSetlist(activeSetlistId, { songs: updated as unknown[] }).catch(() => {});
+      return prev.map(s => s.id === activeSetlistId ? { ...s, songs: updated } : s);
+    });
     showToast('Song added!');
-  }, [activeSetlistId, setlists, updateSetlistSongs]);
+  }, [activeSetlistId, showToast]);
 
   const handleRemoveSong = useCallback((setlistId: string, instanceId: string) => {
-    const current = setlists.find(s => s.id === setlistId);
-    if (!current) return;
-    const updated = current.songs.filter(s => s.instanceId !== instanceId).map((s, i) => ({ ...s, position: i }));
-    updateSetlistSongs(setlistId, updated);
-  }, [setlists, updateSetlistSongs]);
+    setSetlists(prev => {
+      const sl = prev.find(s => s.id === setlistId);
+      if (!sl) return prev;
+      const updated = sl.songs
+        .filter(s => s.instanceId !== instanceId)
+        .map((s, i) => ({ ...s, position: i }));
+      updateSetlist(setlistId, { songs: updated as unknown[] }).catch(() => {});
+      return prev.map(s => s.id === setlistId ? { ...s, songs: updated } : s);
+    });
+  }, []);
 
-  // ── DnD sensors ────────────────────────────────────────────────────────────
+  const handleReorder = useCallback((setlistId: string, fromIndex: number, toIndex: number) => {
+    setSetlists(prev => {
+      const sl = prev.find(s => s.id === setlistId);
+      if (!sl) return prev;
+      const songs = [...sl.songs];
+      const [moved] = songs.splice(fromIndex, 1);
+      songs.splice(toIndex, 0, moved);
+      const reordered = songs.map((s, i) => ({ ...s, position: i }));
+      updateSetlist(setlistId, { songs: reordered as unknown[] }).catch(() => {});
+      return prev.map(s => s.id === setlistId ? { ...s, songs: reordered } : s);
+    });
+  }, []);
+
+  const handleUpdateSong = useCallback((setlistId: string, instanceId: string, patch: Partial<SetlistSong>) => {
+    setSetlists(prev => {
+      const sl = prev.find(s => s.id === setlistId);
+      if (!sl) return prev;
+      const updated = sl.songs.map(s => s.instanceId === instanceId ? { ...s, ...patch } : s);
+      updateSetlist(setlistId, { songs: updated as unknown[] }).catch(() => {});
+      return prev.map(s => s.id === setlistId ? { ...s, songs: updated } : s);
+    });
+  }, []);
+
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
   );
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -168,294 +243,309 @@ export default function Dashboard() {
     if (data?.type === 'master') setDragSongId(data.songId);
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
     setDragSongId(null);
     const { active, over } = event;
     if (!over) return;
-
     const activeData = active.data.current;
+    const overData = over.data.current;
     const overId = String(over.id);
-
-    // Dropped from master list onto a setlist drop zone
     if (activeData?.type === 'master') {
-      const targetSetlistId = overId.startsWith('setlist-drop-') ? overId.replace('setlist-drop-', '') : null;
-      const resolvedId = targetSetlistId ?? activeSetlistId;
-      if (resolvedId) {
-        const current = setlists.find(s => s.id === resolvedId);
-        if (!current) return;
-        const newItem: SetlistSong = { instanceId: uuid(), songId: activeData.songId, position: current.songs.length };
-        updateSetlistSongs(resolvedId, [...current.songs, newItem]);
+      const targetId =
+        overId.startsWith('setlist-drop-') ? overId.replace('setlist-drop-', '') :
+        overData?.setlistId ? String(overData.setlistId) :
+        activeSetlistId;
+      if (targetId) {
+        setSetlists(prev => {
+          const sl = prev.find(s => s.id === targetId);
+          if (!sl) return prev;
+          const newItem: SetlistSong = { instanceId: uuid(), songId: activeData.songId, position: sl.songs.length };
+          const updated = [...sl.songs, newItem];
+          updateSetlist(targetId, { songs: updated as unknown[] }).catch(() => {});
+          return prev.map(s => s.id === targetId ? { ...s, songs: updated } : s);
+        });
         showToast('Song added!');
       }
-      return;
     }
+  }, [activeSetlistId, showToast]);
 
-    // Reordering within a setlist
-    if (activeData?.type === 'sortable' || active.data.current) {
-      // Find which setlist owns this item
-      for (const sl of setlists) {
-        const activeIdx = sl.songs.findIndex(s => s.instanceId === String(active.id));
-        const overIdx = sl.songs.findIndex(s => s.instanceId === overId);
-        if (activeIdx !== -1 && overIdx !== -1) {
-          const reordered = arrayMove(sl.songs, activeIdx, overIdx).map((s, i) => ({ ...s, position: i }));
-          updateSetlistSongs(sl.id, reordered);
-          return;
-        }
-      }
+  const handleExportSet = useCallback((sl: Setlist) => {
+    if (!selectedGig) return;
+    exportSetlistPDF(sl, selectedGig, allSongs).catch(() => showToast('Export failed'));
+  }, [selectedGig, allSongs, showToast]);
+
+  const handleExportGig = useCallback(async () => {
+    if (!selectedGig || gigSetlists.length === 0) return;
+    try {
+      showToast('Generating PDF...');
+      await exportGigPDF(selectedGig, gigSetlists, allSongs);
+    } catch (e) {
+      console.error(e);
+      showToast('Error generating PDF');
     }
-  };
+  }, [selectedGig, gigSetlists, allSongs, showToast]);
 
-  // ── Export / Print ─────────────────────────────────────────────────────────
-  const handleExport = (sl: Setlist) => {
+  const handlePrint = useCallback((sl: Setlist) => {
     if (!selectedGig) return;
-    exportSetlistPDF(sl, selectedGig);
-  };
+    printSetlist(sl, selectedGig, allSongs);
+  }, [selectedGig, allSongs]);
 
-  const handlePrint = (sl: Setlist) => {
-    if (!selectedGig) return;
-    printSetlist(sl, selectedGig);
-  };
+  const handleOpenStage = useCallback(() => {
+    if (!selectedGigId) return;
+    if (typeof window !== 'undefined') {
+      window.open(`/stage/${selectedGigId}`, '_blank', 'noopener,noreferrer');
+    }
+  }, [selectedGigId]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('est-auth');
-    router.push('/');
-  };
+  const reloadSetlists = useCallback(async () => {
+    if (!selectedGigId) return;
+    try {
+      const data = await getSetlistsForGig(selectedGigId);
+      const parsed = (data || []).map((s: Record<string, unknown>) => ({
+        ...s,
+        songs: Array.isArray(s.songs) ? s.songs : JSON.parse((s.songs as string) || '[]'),
+      }));
+      setSetlists(parsed as Setlist[]);
+    } catch { /* silent */ }
+  }, [selectedGigId]);
 
-  // ── Drag overlay song ──────────────────────────────────────────────────────
-  const draggingSong = dragSongId ? getSongById(dragSongId) : null;
+  const handleLogout = () => { localStorage.removeItem('est-auth'); router.push('/'); };
 
-  return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <div className="flex flex-col h-screen overflow-hidden" style={{ background: '#080808' }}>
+  const draggingSong = dragSongId ? allSongs.find(s => s.id === dragSongId) : null;
 
-        {/* Top nav */}
-        <nav
-          className="flex items-center justify-between px-4 py-2 no-print shrink-0"
-          style={{ background: '#0a0a0a', borderBottom: '1px solid #1a1a1a', height: 52 }}
-        >
-          <div className="flex items-center gap-3">
-            <Image src="/logo.png" alt="EST" width={36} height={36} className="rounded-sm" />
+  const SetlistsColumn = (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-app)' }}>
+      <GigPanel
+        gigs={gigs}
+        selectedGigId={selectedGigId}
+        onSelectGig={id => { setSelectedGigId(id); setActiveSetlistId(null); }}
+        onCreate={handleCreateGig}
+        onUpdate={handleUpdateGig}
+        onDelete={handleDeleteGig}
+        loading={loadingGigs}
+      />
+
+      {selectedGigId ? (
+        <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
             <div>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', letterSpacing: '0.12em', color: '#fff' }}>
-                SETLIST MANAGER
-              </span>
-              <span className="hidden md:inline ml-2 text-xs" style={{ color: '#444', fontFamily: 'var(--font-body)' }}>
-                · Every Second Tuesday
-              </span>
+              <div className="label-eyebrow">Run sheet for {selectedGig?.name}</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: 'var(--ink-1)', marginTop: 2, letterSpacing: '-0.01em' }}>Setlists</div>
             </div>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="text-xs uppercase tracking-widest"
-            style={{ fontFamily: 'var(--font-body)', background: 'none', border: '1px solid #222', color: '#555', cursor: 'pointer', padding: '4px 12px' }}
-          >
-            Logout
-          </button>
-        </nav>
-
-        {/* Three-column layout */}
-        <div className="flex flex-1 min-h-0">
-
-          {/* Left: Song catalogue */}
-          <div className="w-72 shrink-0 flex flex-col min-h-0 no-print">
-            <MasterSongList
-              activeSetlistId={activeSetlistId}
-              onDoubleClickAdd={addSongToActive}
-            />
+            <button onClick={handleCreateSetlist} style={primaryPillStyle}>+ New set</button>
           </div>
 
-          {/* Center: Gig + Setlists */}
-          <div className="w-80 shrink-0 flex flex-col min-h-0 no-print" style={{ borderRight: '1px solid #1e1e1e', overflowY: 'auto' }}>
-            <GigPanel
-              gigs={gigs}
-              selectedGigId={selectedGigId}
-              onSelectGig={id => { setSelectedGigId(id); setActiveSetlistId(null); }}
-              onCreate={handleCreateGig}
-              onUpdate={handleUpdateGig}
-              onDelete={handleDeleteGig}
-              loading={loadingGigs}
-            />
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16, padding: '12px 14px', background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border-soft)' }}>
+            <button onClick={() => setShowGenerate(true)} title="Generate a setlist from the crowd model" style={primaryPillStyle}>✨ Generate set</button>
+            <button onClick={() => setShowScout(true)} title="Research the venue — feeds the generator" style={secondaryPillStyle}>🔍 Scout venue</button>
+            {gigHasSongs && <button onClick={handleOpenStage} title="Open stage mode in a new tab" style={secondaryPillStyle}>▶ Open stage mode</button>}
+            {gigHasSongs && <button onClick={() => setShowDebrief(true)} title="Rate each song after the gig — feeds the generator" style={secondaryPillStyle}>◉ Debrief gig</button>}
+            {gigSetlists.length > 0 && <button onClick={handleExportGig} style={secondaryPillStyle} title="Export full gig PDF">Export PDF</button>}
+          </div>
 
-            {/* Setlists section */}
-            {selectedGigId && (
-              <div className="flex-1 p-3">
-                <div className="flex items-center justify-between mb-3">
-                  <span style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', letterSpacing: '0.1em', color: '#fff' }}>
-                    SETLISTS
-                  </span>
-                  <button
-                    onClick={handleCreateSetlist}
-                    style={{
-                      fontFamily: 'var(--font-body)',
-                      fontSize: '10px',
-                      background: '#fff',
-                      color: '#000',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: '4px 10px',
-                      letterSpacing: '0.1em',
-                    }}
-                  >
-                    + NEW SET
-                  </button>
-                </div>
-
-                {loadingSetlists ? (
-                  <div className="text-xs text-center py-4" style={{ color: '#444', fontFamily: 'var(--font-body)' }}>Loading...</div>
-                ) : gigSetlists.length === 0 ? (
-                  <div className="text-xs text-center py-8" style={{ color: '#444', fontFamily: 'var(--font-body)' }}>
-                    No setlists yet.<br />Create one above.
+          {loadingSetlists ? (
+            <div style={{ color: 'var(--ink-3)', fontSize: 13, textAlign: 'center', padding: '32px 16px', fontFamily: 'var(--font-body)' }}>Loading sets…</div>
+          ) : gigSetlists.length === 0 ? (
+            <div style={{ padding: '36px 20px', textAlign: 'center', background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', border: '0.5px dashed var(--border-medium)', color: 'var(--ink-3)', fontSize: 13, lineHeight: 1.6 }}>
+              <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.5 }}>🎶</div>
+              <div style={{ color: 'var(--ink-2)', fontWeight: 600, marginBottom: 4 }}>No sets yet</div>
+              <div>Tap <strong style={{ color: 'var(--ink-2)' }}>+ New set</strong> above, or use <strong style={{ color: 'var(--ink-2)' }}>✨ Generate set</strong> to build one for you.</div>
+            </div>
+          ) : (
+            <>
+              {gigSetlists.map(sl => (
+                <SetlistPanel
+                  key={sl.id}
+                  setlist={sl}
+                  isActive={activeSetlistId === sl.id}
+                  onActivate={() => setActiveSetlistId(sl.id)}
+                  onRename={name => handleRenameSetlist(sl.id, name)}
+                  onDelete={() => handleDeleteSetlist(sl.id)}
+                  onRemoveSong={instanceId => handleRemoveSong(sl.id, instanceId)}
+                  onReorder={handleReorder}
+                  onUpdateSong={handleUpdateSong}
+                  onExport={handleExportSet}
+                  onPrint={handlePrint}
+                  gigName={selectedGig?.name ?? ''}
+                  gigDate={selectedGig?.date ?? ''}
+                  gigVenue={selectedGig?.venue ?? ''}
+                  allSongs={allSongs}
+                />
+              ))}
+              {(() => {
+                const total = gigSetlists.reduce((acc, sl) => acc + sl.songs.reduce((a, item) => {
+                  const s = allSongs.find(song => song.id === item.songId);
+                  return a + (s?.duration ?? 0);
+                }, 0), 0);
+                return (
+                  <div style={{ marginTop: 16, padding: '14px 16px', background: 'var(--bg-surface)', border: '0.5px solid var(--border-soft)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <span className="label-eyebrow">Total gig</span>
+                    <span style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, color: 'var(--brand-pink)', letterSpacing: '-0.01em' }}>{Math.floor(total / 60)}m {total % 60}s</span>
                   </div>
+                );
+              })()}
+            </>
+          )}
+        </div>
+      ) : (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32, textAlign: 'center' }}>
+          <div style={{ maxWidth: 280 }}>
+            <div style={{ fontSize: 36, marginBottom: 8, opacity: 0.5 }}>🎤</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: 'var(--ink-1)', letterSpacing: '-0.01em' }}>Pick a gig to begin</div>
+            <div style={{ color: 'var(--ink-3)', fontSize: 13, marginTop: 6, lineHeight: 1.5 }}>Choose a gig from the list above, or create a new one to start building setlists.</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const OverviewColumn = (
+    <div style={{ padding: '24px 20px', overflowY: 'auto', height: '100%', background: 'var(--bg-app)' }}>
+      {!selectedGigId ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center', gap: 16, padding: 24 }}>
+          <div style={{ fontSize: 44, opacity: 0.45 }}>📋</div>
+          <div style={{ maxWidth: 280 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600, color: 'var(--ink-1)', letterSpacing: '-0.01em' }}>Your run sheet lives here</div>
+            <div style={{ color: 'var(--ink-3)', fontSize: 13, marginTop: 8, lineHeight: 1.6 }}>Pick a gig on the left to see your run sheet — every set, every song, every timing.</div>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div className="label-eyebrow">Run sheet</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600, color: 'var(--ink-1)', marginTop: 2, letterSpacing: '-0.01em' }}>{selectedGig?.name}</div>
+          {(selectedGig?.date || selectedGig?.venue) && (
+            <div style={{ color: 'var(--ink-3)', fontSize: 13, fontFamily: 'var(--font-body)', marginTop: 4, marginBottom: 20 }}>{[selectedGig?.date, selectedGig?.venue].filter(Boolean).join(' · ')}</div>
+          )}
+          {!selectedGig?.date && !selectedGig?.venue && <div style={{ height: 16 }} />}
+          {gigSetlists.length === 0 ? (
+            <div style={{ color: 'var(--ink-3)', fontSize: 13, fontFamily: 'var(--font-body)', marginTop: 20, padding: '24px 20px', background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', border: '0.5px dashed var(--border-medium)', textAlign: 'center' }}>No sets yet for this gig.</div>
+          ) : gigSetlists.map((sl) => {
+            const setTotalSecs = sl.songs.reduce((acc, item) => {
+              const s = allSongs.find(song => song.id === item.songId);
+              const dur = s?.duration ?? 0;
+              // Guard against corrupted data (duration must be a finite number ≤ 1 hour)
+              return acc + (Number.isFinite(dur) && dur > 0 && dur <= 3600 ? dur : 0);
+            }, 0);
+            return (
+              <div key={sl.id} style={{ marginBottom: 16, background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border-soft)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '12px 16px', borderBottom: '0.5px solid var(--border-soft)' }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, color: 'var(--ink-1)', letterSpacing: '-0.005em' }}>{sl.name}</span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 600, color: 'var(--brand-pink)' }}>{formatTotalDuration(setTotalSecs)}</span>
+                </div>
+                {sl.songs.length === 0 ? (
+                  <div style={{ color: 'var(--ink-3)', fontSize: 12, fontStyle: 'italic', padding: '12px 16px' }}>No songs yet</div>
                 ) : (
-                  gigSetlists.map(sl => (
-                    <SetlistPanel
-                      key={sl.id}
-                      setlist={sl}
-                      isActive={activeSetlistId === sl.id}
-                      onActivate={() => setActiveSetlistId(sl.id)}
-                      onRename={name => handleRenameSetlist(sl.id, name)}
-                      onDelete={() => handleDeleteSetlist(sl.id)}
-                      onRemoveSong={instanceId => handleRemoveSong(sl.id, instanceId)}
-                      onExport={handleExport}
-                      onPrint={handlePrint}
-                      gigName={selectedGig?.name ?? ''}
-                      gigDate={selectedGig?.date ?? ''}
-                      gigVenue={selectedGig?.venue ?? ''}
-                    />
-                  ))
+                  <div style={{ padding: '6px 16px 10px' }}>
+                    {sl.songs.map((item, i) => {
+                      const song = allSongs.find(s => s.id === item.songId);
+                      if (!song) return null;
+                      return (
+                        <div key={item.instanceId} style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '6px 0', borderBottom: i < sl.songs.length - 1 ? '0.5px solid var(--border-soft)' : 'none' }}>
+                          <span style={{ color: 'var(--ink-3)', fontSize: 11, width: 18, textAlign: 'right', flexShrink: 0, fontWeight: 500 }}>{i + 1}</span>
+                          <span style={{ color: 'var(--ink-1)', fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{song.title}</span>
+                          <span style={{ color: 'var(--ink-3)', fontSize: 11, flexShrink: 0 }}>{Math.floor(song.duration / 60)}:{String(song.duration % 60).padStart(2, '0')}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
-            )}
+            );
+          })}
+          {gigSetlists.length > 0 && (() => {
+            const total = gigSetlists.reduce((acc, sl) => acc + sl.songs.reduce((a, item) => {
+              const s = allSongs.find(song => song.id === item.songId);
+              const dur = s?.duration ?? 0;
+              return a + (Number.isFinite(dur) && dur > 0 && dur <= 3600 ? dur : 0);
+            }, 0), 0);
+            const songCount = gigSetlists.reduce((a, sl) => a + sl.songs.length, 0);
+            return (
+              <div style={{ marginTop: 8, padding: '14px 16px', background: 'var(--bg-surface)', border: '0.5px solid var(--border-soft)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span className="label-eyebrow">{songCount} songs total</span>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600, color: 'var(--brand-pink)', letterSpacing: '-0.01em' }}>{formatTotalDuration(total)}</span>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+    </div>
+  );
 
-            {!selectedGigId && (
-              <div className="flex-1 flex items-center justify-center p-6 text-center">
-                <div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', letterSpacing: '0.2em', color: '#222' }}>
-                    SELECT A GIG
-                  </div>
-                  <div className="mt-2 text-xs" style={{ color: '#333', fontFamily: 'var(--font-body)' }}>
-                    or create a new one above
-                  </div>
-                </div>
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-app)', color: 'var(--ink-1)' }}>
+        <nav style={{ height: 60, borderBottom: '0.5px solid var(--border-soft)', background: 'var(--bg-app)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <Image src="/est_logo_cropped.png" alt="Every Second Tuesday" width={160} height={40} style={{ height: 32, width: 'auto' }} />
+            <span className="label-eyebrow" style={{ marginLeft: 4 }}>Gigs</span>
+          </div>
+          <div ref={menuRef} style={{ position: 'relative' }}>
+            <button onClick={() => setMenuOpen(o => !o)} title="Settings" style={{ background: 'transparent', border: '0.5px solid var(--border-soft)', color: 'var(--ink-2)', cursor: 'pointer', width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, transition: 'background 0.15s' }} onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>⚙</button>
+            {menuOpen && (
+              <div style={{ position: 'absolute', top: 44, right: 0, background: 'var(--bg-surface)', border: '0.5px solid var(--border-soft)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-lg)', minWidth: 180, padding: 6, zIndex: 100 }}>
+                <button onClick={() => { setMenuOpen(false); handleLogout(); }} style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: 'var(--ink-2)', fontSize: 13, padding: '8px 12px', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }} onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-subtle)')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>Reset session</button>
               </div>
             )}
           </div>
+        </nav>
 
-          {/* Right: Overview / instructions */}
-          <div className="flex-1 flex flex-col min-h-0 p-4 no-print" style={{ overflowY: 'auto' }}>
-            {!selectedGigId ? (
-              <div className="flex flex-col items-center justify-center h-full text-center gap-6">
-                <Image src="/logo.png" alt="EST" width={120} height={120} className="opacity-20" />
-                <div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', letterSpacing: '0.15em', color: '#1e1e1e' }}>
-                    EVERY SECOND TUESDAY
-                  </div>
-                  <div className="mt-2 text-xs" style={{ color: '#2a2a2a', fontFamily: 'var(--font-body)' }}>
-                    45 songs · 5 decades · 1 loud night
-                  </div>
-                </div>
-                <div className="text-xs" style={{ color: '#2a2a2a', fontFamily: 'var(--font-body)', lineHeight: 1.8 }}>
-                  1. Create a gig ←<br />
-                  2. Add setlists to the gig<br />
-                  3. Drag songs from the catalogue<br />
-                  4. Export or print your setlist
-                </div>
-              </div>
-            ) : selectedGig ? (
-              <div>
-                <div className="mb-4">
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', letterSpacing: '0.12em', color: '#fff' }}>
-                    {selectedGig.name.toUpperCase()}
-                  </div>
-                  {(selectedGig.date || selectedGig.venue) && (
-                    <div className="mt-1 text-xs" style={{ color: '#666', fontFamily: 'var(--font-body)' }}>
-                      {[selectedGig.date, selectedGig.venue].filter(Boolean).join(' · ')}
-                    </div>
-                  )}
-                  {selectedGig.notes && (
-                    <div className="mt-2 text-xs p-3" style={{ background: '#111', color: '#888', fontFamily: 'var(--font-body)', borderLeft: '2px solid #333' }}>
-                      {selectedGig.notes}
-                    </div>
-                  )}
-                </div>
+        <div className="hidden md:flex" style={{ flex: 1, minHeight: 0, gap: 12, padding: 12 }}>
+          <div style={{ width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--bg-surface)', borderRadius: 'var(--radius-lg)', border: '0.5px solid var(--border-soft)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+            <MasterSongList activeSetlistId={activeSetlistId} onDoubleClickAdd={addSongToActive} customSongs={customSongs} onOpenAddSong={() => setShowAddSong(true)} />
+          </div>
+          <div style={{ width: 460, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--bg-surface)', borderRadius: 'var(--radius-lg)', border: '0.5px solid var(--border-soft)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+            {SetlistsColumn}
+          </div>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--bg-surface)', borderRadius: 'var(--radius-lg)', border: '0.5px solid var(--border-soft)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+            {OverviewColumn}
+          </div>
+        </div>
 
-                {/* Summary cards */}
-                <div className="grid grid-cols-2 gap-2 mb-4">
-                  <div className="p-3" style={{ background: '#111', border: '1px solid #1e1e1e' }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: '#fff' }}>{gigSetlists.length}</div>
-                    <div className="text-xs uppercase tracking-widest" style={{ color: '#555', fontFamily: 'var(--font-body)' }}>Setlists</div>
-                  </div>
-                  <div className="p-3" style={{ background: '#111', border: '1px solid #1e1e1e' }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: '#fff' }}>
-                      {gigSetlists.reduce((a, s) => a + s.songs.length, 0)}
-                    </div>
-                    <div className="text-xs uppercase tracking-widest" style={{ color: '#555', fontFamily: 'var(--font-body)' }}>Total Songs</div>
-                  </div>
-                </div>
-
-                {/* Setlist summaries */}
-                {gigSetlists.map(sl => {
-                  const secs = sl.songs.reduce((acc, item) => {
-                    const s = getSongById(item.songId);
-                    return acc + (s?.duration ?? 0);
-                  }, 0);
-                  const mins = Math.floor(secs / 60);
-                  return (
-                    <div key={sl.id} className="p-3 mb-2" style={{ background: activeSetlistId === sl.id ? '#1a1a1a' : '#0f0f0f', border: `1px solid ${activeSetlistId === sl.id ? '#333' : '#1a1a1a'}` }}>
-                      <div className="flex justify-between items-center mb-2">
-                        <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.9rem', letterSpacing: '0.1em', color: activeSetlistId === sl.id ? '#fff' : '#666' }}>
-                          {sl.name.toUpperCase()}
-                        </span>
-                        <span className="text-xs" style={{ color: '#555', fontFamily: 'var(--font-body)' }}>
-                          {sl.songs.length} songs · {mins}m
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {sl.songs.slice(0, 8).map((item, i) => {
-                          const s = getSongById(item.songId);
-                          return s ? (
-                            <span key={item.instanceId} className="text-xs px-1" style={{ background: '#1a1a1a', color: '#666', fontFamily: 'var(--font-body)', border: '1px solid #222' }}>
-                              {i + 1}. {s.title}
-                            </span>
-                          ) : null;
-                        })}
-                        {sl.songs.length > 8 && (
-                          <span className="text-xs px-1" style={{ color: '#444', fontFamily: 'var(--font-body)' }}>+{sl.songs.length - 8} more</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
+        <div className="flex md:hidden" style={{ flex: 1, flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            {mobileTab === 'songs' && <div style={{ height: '100%' }}><MasterSongList activeSetlistId={activeSetlistId} onDoubleClickAdd={id => { addSongToActive(id); setMobileTab('gigs'); }} customSongs={customSongs} onOpenAddSong={() => setShowAddSong(true)} /></div>}
+            {mobileTab === 'gigs' && <div style={{ height: '100%', overflowY: 'auto' }}>{SetlistsColumn}</div>}
+            {mobileTab === 'overview' && <div style={{ height: '100%' }}>{OverviewColumn}</div>}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', background: 'var(--bg-surface)', borderTop: '0.5px solid var(--border-soft)', height: 64, flexShrink: 0, boxShadow: '0 -2px 12px rgba(20, 15, 5, 0.04)' }}>
+            {([{ id: 'songs', label: 'Songs', icon: '♫' }, { id: 'gigs', label: 'Sets', icon: '☰' }, { id: 'overview', label: 'Run sheet', icon: '☷' }] as const).map(tab => {
+              const isActive = mobileTab === tab.id;
+              return (
+                <button key={tab.id} onClick={() => setMobileTab(tab.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, color: isActive ? 'var(--brand-pink)' : 'var(--ink-3)' }}>
+                  <span style={{ fontSize: 18 }}>{tab.icon}</span>
+                  <span style={{ fontSize: 11, fontWeight: isActive ? 600 : 500 }}>{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
 
-      {/* Drag overlay */}
       <DragOverlay>
         {draggingSong ? (
-          <div className="px-3 py-2 text-sm font-bold" style={{ background: '#1a1a1a', border: '1px solid #ff3d6e', color: '#fff', fontFamily: 'var(--font-body)', boxShadow: '0 8px 24px rgba(0,0,0,0.8)', minWidth: 200 }}>
-            {draggingSong.title}
-            <div className="text-xs font-normal" style={{ color: '#888' }}>{draggingSong.artist} · {formatDuration(draggingSong.duration)}</div>
+          <div style={{ background: 'var(--bg-surface)', border: '0.5px solid var(--brand-pink)', color: 'var(--ink-1)', padding: '10px 14px', minWidth: 220, borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-body)', boxShadow: 'var(--shadow-lg)' }}>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{draggingSong.title}</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{draggingSong.artist} · {formatDuration(draggingSong.duration)}</div>
           </div>
         ) : null}
       </DragOverlay>
 
-      {/* Toast */}
       {toast && (
-        <div
-          className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 text-sm no-print"
-          style={{ background: '#1a1a1a', border: '1px solid #333', color: '#fff', fontFamily: 'var(--font-body)', zIndex: 9999, letterSpacing: '0.05em' }}
-        >
-          {toast}
-        </div>
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: 'var(--ink-1)', color: '#fff', padding: '10px 18px', borderRadius: 'var(--radius-pill)', fontSize: 13, fontWeight: 500, boxShadow: 'var(--shadow-lg)', zIndex: 9999, whiteSpace: 'nowrap' }}>{toast}</div>
       )}
+
+      {showAddSong && <AddSongModal onClose={() => setShowAddSong(false)} onAdded={reloadCustomSongs} />}
+      {showGenerate && selectedGigId && <GenerateSetlistModal gigId={selectedGigId} gigName={selectedGig?.name ?? 'Gig'} onClose={() => setShowGenerate(false)} onApplied={() => { reloadSetlists(); showToast('Setlist generated'); }} />}
+      {showDebrief && selectedGigId && <DebriefModal gigId={selectedGigId} gigName={selectedGig?.name ?? 'Gig'} onClose={() => setShowDebrief(false)} onSaved={() => showToast('Debrief saved — generator will learn from this')} />}
+      {showScout && selectedGigId && selectedGig && <VenueScoutModal venueName={selectedGig.venue || selectedGig.name || 'Venue'} city="" onClose={() => setShowScout(false)} onSaved={() => showToast('Venue profile saved — generator will use it')} />}
     </DndContext>
   );
 }
+
+const primaryPillStyle: React.CSSProperties = {
+  fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, background: 'var(--brand-pink)', color: '#fff', border: 'none', cursor: 'pointer', padding: '8px 16px', borderRadius: 'var(--radius-pill)', transition: 'filter 0.15s',
+};
+
+const secondaryPillStyle: React.CSSProperties = {
+  fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 500, background: 'var(--bg-surface)', color: 'var(--ink-1)', border: '0.5px solid var(--border-medium)', cursor: 'pointer', padding: '8px 14px', borderRadius: 'var(--radius-pill)', transition: 'background 0.15s',
+};
